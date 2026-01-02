@@ -210,6 +210,35 @@ class DatabaseService:
                 )
             """)
 
+            # Patient preferences table (for reminders, etc.)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS patient_preferences (
+                    patient_id INTEGER PRIMARY KEY,
+                    reminder_opted_out INTEGER DEFAULT 0,
+                    preferred_channel TEXT DEFAULT 'whatsapp',
+                    reminder_timing TEXT DEFAULT '1_day',
+                    clinical_reminders INTEGER DEFAULT 1,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+
+            # Reminder log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS reminder_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    reminder_type TEXT NOT NULL,
+                    reference_id INTEGER,
+                    channel TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    message TEXT,
+                    sent_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_reminder_patient ON reminder_log(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_reminder_date ON reminder_log(sent_at)")
+
             # Drug interactions table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS drug_interactions (
@@ -1872,3 +1901,139 @@ class DatabaseService:
             cursor.execute("""
                 UPDATE appointments SET is_deleted = 1, status = 'cancelled' WHERE id = ?
             """, (appt_id,))
+
+    # ============== PATIENT PREFERENCES ==============
+
+    def get_patient_preferences(self, patient_id: int) -> dict | None:
+        """Get patient preferences for reminders etc."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM patient_preferences WHERE patient_id = ?
+            """, (patient_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def set_patient_preferences(self, patient_id: int, preferences: dict):
+        """Set or update patient preferences."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO patient_preferences (
+                    patient_id, reminder_opted_out, preferred_channel,
+                    reminder_timing, clinical_reminders
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(patient_id) DO UPDATE SET
+                    reminder_opted_out = excluded.reminder_opted_out,
+                    preferred_channel = excluded.preferred_channel,
+                    reminder_timing = excluded.reminder_timing,
+                    clinical_reminders = excluded.clinical_reminders
+            """, (
+                patient_id,
+                preferences.get('reminder_opted_out', 0),
+                preferences.get('preferred_channel', 'whatsapp'),
+                preferences.get('reminder_timing', '1_day'),
+                preferences.get('clinical_reminders', 1)
+            ))
+
+    def opt_out_reminders(self, patient_id: int, opt_out: bool = True):
+        """Opt patient in/out of reminders."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO patient_preferences (patient_id, reminder_opted_out)
+                VALUES (?, ?)
+                ON CONFLICT(patient_id) DO UPDATE SET reminder_opted_out = ?
+            """, (patient_id, 1 if opt_out else 0, 1 if opt_out else 0))
+
+    # ============== REMINDER LOG ==============
+
+    def log_reminder(
+        self,
+        patient_id: int,
+        reminder_type: str,
+        reference_id: int | None,
+        channel: str,
+        status: str,
+        message: str = None
+    ) -> int:
+        """Log a sent reminder."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO reminder_log (
+                    patient_id, reminder_type, reference_id,
+                    channel, status, message
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """, (patient_id, reminder_type, reference_id, channel, status, message))
+            return cursor.lastrowid
+
+    def get_reminder_logs(
+        self,
+        patient_id: int = None,
+        reference_id: int = None,
+        reminder_type: str = None,
+        date: str = None,
+        limit: int = 50
+    ) -> list[dict]:
+        """Get reminder logs with optional filters."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM reminder_log WHERE 1=1"
+            params = []
+
+            if patient_id:
+                query += " AND patient_id = ?"
+                params.append(patient_id)
+            if reference_id:
+                query += " AND reference_id = ?"
+                params.append(reference_id)
+            if reminder_type:
+                query += " AND reminder_type = ?"
+                params.append(reminder_type)
+            if date:
+                query += " AND date(sent_at) = ?"
+                params.append(date)
+
+            query += " ORDER BY sent_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_pending_reminder_count(self, days_ahead: int = 1) -> int:
+        """Get count of appointments needing reminders."""
+        from datetime import date as dt, timedelta
+        target_date = (dt.today() + timedelta(days=days_ahead)).isoformat()
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM appointments a
+                LEFT JOIN patient_preferences pp ON a.patient_id = pp.patient_id
+                WHERE a.appointment_date = ?
+                  AND a.is_deleted = 0
+                  AND a.status != 'cancelled'
+                  AND (pp.reminder_opted_out IS NULL OR pp.reminder_opted_out = 0)
+                  AND a.id NOT IN (
+                      SELECT reference_id FROM reminder_log
+                      WHERE reminder_type = 'appointment'
+                        AND date(sent_at) = date('now')
+                        AND reference_id IS NOT NULL
+                  )
+            """, (target_date,))
+            return cursor.fetchone()[0]
+
+    def get_reminder_history(self, patient_id: int, limit: int = 20) -> list[dict]:
+        """Get reminder history for a patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT r.*, a.appointment_date, a.appointment_time
+                FROM reminder_log r
+                LEFT JOIN appointments a ON r.reference_id = a.id AND r.reminder_type = 'appointment'
+                WHERE r.patient_id = ?
+                ORDER BY r.sent_at DESC
+                LIMIT ?
+            """, (patient_id, limit))
+            return [dict(row) for row in cursor.fetchall()]

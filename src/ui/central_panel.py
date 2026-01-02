@@ -21,6 +21,7 @@ from .whatsapp_share_dialog import show_whatsapp_share
 from .appointment_panel import show_schedule_followup
 from .components.voice_input import VoiceInputButton
 from ..services.voice import is_voice_available
+from .reminder_dialog import show_reminder_settings
 
 
 class CentralPanel:
@@ -676,12 +677,22 @@ class CentralPanel:
             icon_size=20,
         )
 
+        self.reminder_settings_btn = ft.IconButton(
+            icon=ft.Icons.NOTIFICATIONS_OUTLINED,
+            tooltip="Reminder settings",
+            on_click=self._show_reminder_settings,
+            icon_size=20,
+        )
+
         self.patient_header.content = ft.Row([
             ft.Column([
                 ft.Text(header_text, size=18, weight=ft.FontWeight.BOLD),
                 ft.Text(" | ".join(details), size=13, color=ft.Colors.GREY_600),
             ], spacing=2),
-            self.audit_history_btn,
+            ft.Row([
+                self.reminder_settings_btn,
+                self.audit_history_btn,
+            ], spacing=0),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
         # Enable generate and templates buttons
@@ -719,6 +730,16 @@ class CentralPanel:
         """Show audit history dialog for current patient."""
         if self.current_patient and e.page:
             self.audit_dialog.show(e.page, self.current_patient)
+
+    def _show_reminder_settings(self, e):
+        """Show reminder settings dialog for current patient."""
+        if self.current_patient and e.page:
+            show_reminder_settings(
+                e.page,
+                self.db,
+                self.current_patient.id,
+                self.current_patient.name
+            )
 
     def _build_trends_tab(self) -> ft.Control:
         """Build the trends tab with pre-built trend panels."""

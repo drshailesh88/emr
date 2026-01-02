@@ -23,6 +23,7 @@ from .central_panel import CentralPanel
 from .agent_panel import AgentPanel
 from .phrase_manager import PhraseManager
 from .themes import LIGHT_THEME, DARK_THEME, get_panel_colors, get_alert_colors
+from .reminder_dialog import show_send_reminders, show_reminder_settings
 
 
 class DocAssistApp:
@@ -173,6 +174,11 @@ class DocAssistApp:
                     ft.Row([
                         self.status_bar,
                         self.theme_toggle_button,
+                        ft.IconButton(
+                            icon=ft.Icons.NOTIFICATIONS,
+                            tooltip="Send Reminders",
+                            on_click=self._on_reminders_click
+                        ),
                         ft.IconButton(
                             icon=ft.Icons.TEXT_SNIPPET,
                             tooltip="Quick Phrases",
@@ -481,6 +487,14 @@ class DocAssistApp:
         # Update the page
         self.page.update()
         self._update_status(f"Theme changed to {new_theme}")
+
+    def _on_reminders_click(self, e):
+        """Handle reminders button click."""
+        # Get clinic info from settings
+        clinic_name = self.settings_service.settings.clinic.name or "Kumar Clinic"
+        clinic_phone = self.settings_service.settings.clinic.phone or ""
+
+        show_send_reminders(self.page, self.db, clinic_name, clinic_phone)
 
     def _on_settings_click(self, e):
         """Handle settings click."""
