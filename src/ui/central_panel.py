@@ -18,6 +18,7 @@ from ..services.reference_ranges import TREND_PANELS, get_reference_range
 from ..services.trend_calculator import calculate_trend, prepare_chart_data
 from .flowsheet_panel import ConditionManager
 from .whatsapp_share_dialog import show_whatsapp_share
+from .appointment_panel import show_schedule_followup
 
 
 class CentralPanel:
@@ -1622,7 +1623,39 @@ class CentralPanel:
                 self._show_snackbar("Visit saved successfully")
                 self.save_btn.disabled = True
 
+                # Offer to schedule follow-up
+                self._offer_schedule_followup(e.page)
+
         e.page.update()
+
+    def _offer_schedule_followup(self, page):
+        """Offer to schedule a follow-up after visit."""
+        if not self.current_patient or not self.current_prescription:
+            return
+
+        # Parse follow-up days from prescription
+        suggested_days = 14  # Default
+        if self.current_prescription.follow_up:
+            follow_up = self.current_prescription.follow_up.lower()
+            if "1 week" in follow_up or "one week" in follow_up:
+                suggested_days = 7
+            elif "2 week" in follow_up or "two week" in follow_up:
+                suggested_days = 14
+            elif "3 week" in follow_up or "three week" in follow_up:
+                suggested_days = 21
+            elif "1 month" in follow_up or "one month" in follow_up:
+                suggested_days = 30
+            elif "2 month" in follow_up or "two month" in follow_up:
+                suggested_days = 60
+            elif "3 month" in follow_up or "three month" in follow_up:
+                suggested_days = 90
+
+        show_schedule_followup(
+            page=page,
+            db=self.db,
+            patient=self.current_patient,
+            suggested_days=suggested_days
+        )
 
     def _on_print_click(self, e):
         """Handle print PDF click."""

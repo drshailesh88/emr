@@ -7,6 +7,7 @@ from ..models.schemas import Patient
 from ..services.database import DatabaseService
 from ..services.rag import RAGService
 from .dialogs import ConfirmationDialog
+from .appointment_panel import TodayAppointmentsPanel
 
 
 class PatientPanel:
@@ -38,9 +39,16 @@ class PatientPanel:
         self.patient_list: Optional[ft.ListView] = None
         self.patient_actions: Optional[ft.Row] = None
         self.page: Optional[ft.Page] = None
+        self.appointments_panel: Optional[TodayAppointmentsPanel] = None
 
     def build(self) -> ft.Control:
         """Build the patient panel UI."""
+
+        # Today's appointments panel
+        self.appointments_panel = TodayAppointmentsPanel(
+            db=self.db,
+            on_patient_click=self._on_appointment_patient_click
+        )
 
         # Search field
         self.search_field = ft.TextField(
@@ -96,6 +104,12 @@ class PatientPanel:
 
         return ft.Column(
             [
+                # Today's appointments at top
+                ft.Container(
+                    content=self.appointments_panel.build(),
+                    padding=ft.padding.only(left=10, right=10, top=10),
+                ),
+                ft.Divider(height=1),
                 ft.Container(
                     content=ft.Column([
                         ft.Text("Patients", size=16, weight=ft.FontWeight.BOLD),
@@ -127,6 +141,22 @@ class PatientPanel:
         self.patients = []
         self.search_active = False
         self._refresh_list()
+        self._refresh_appointments()
+
+    def _refresh_appointments(self):
+        """Refresh today's appointments panel."""
+        if self.appointments_panel:
+            self.appointments_panel.refresh()
+
+    def _on_appointment_patient_click(self, patient_id: int):
+        """Handle click on appointment to select patient."""
+        # Find and select the patient
+        patient_data = self.db.get_patient(patient_id)
+        if patient_data:
+            patient = Patient(**patient_data)
+            self.selected_patient_id = patient.id
+            self.selected_patient = patient
+            self.on_patient_selected(patient)
 
     def _refresh_list(self):
         """Refresh the patient list UI with sections."""
