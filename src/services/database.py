@@ -193,6 +193,23 @@ class DatabaseService:
                 )
             """)
 
+            # Appointments table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS appointments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    appointment_date TEXT NOT NULL,
+                    appointment_time TEXT,
+                    duration_minutes INTEGER DEFAULT 15,
+                    appointment_type TEXT DEFAULT 'follow-up',
+                    status TEXT DEFAULT 'scheduled',
+                    notes TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    is_deleted INTEGER DEFAULT 0,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+
             # Create indexes for faster search
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(name)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id)")
@@ -209,6 +226,9 @@ class DatabaseService:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_phrases_shortcut ON phrases(shortcut)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_access_patient ON patient_access_log(patient_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_access_time ON patient_access_log(accessed_at DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_date ON appointments(appointment_date)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_patient ON appointments(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_status ON appointments(status)")
 
             # Add is_deleted column to existing tables if not exists
             self._add_column_if_not_exists(cursor, "patients", "is_deleted", "INTEGER DEFAULT 0")
