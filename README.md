@@ -35,3 +35,4 @@ Local data is stored in `data/` (SQLite DB, Chroma vectors, PDFs). This folder i
 ## Notes
 - The app uses a 3-panel Flet UI (patients, clinical notes, AI assistant).
 - LLM output is treated as a draft and must be confirmed before saving.
+- Keep instructions in `CLAUDE.md`, `AGENTS.md`, `CODEX.md`, `GEMINI.md`, and `GROK.md` in sync.
