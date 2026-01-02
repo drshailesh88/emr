@@ -1,0 +1,22 @@
+[
+  {
+    "chief_complaint": "Chest pain x 2 days",
+    "clinical_notes": "Patient presents with substernal chest pain, radiating to left arm. History of hypertension. ECG shows ST elevation. Troponin pending.",
+    "diagnosis": "Acute Coronary Syndrome"
+  },
+  {
+    "chief_complaint": "Fever and cough x 5 days",
+    "clinical_notes": "Temperature 101F, productive cough with yellow sputum. Chest clear on auscultation. SPO2 98% on room air.",
+    "diagnosis": "Acute Bronchitis"
+  },
+  {
+    "chief_complaint": "Headache and blurred vision",
+    "clinical_notes": "BP 180/110 mmHg. No focal neurological deficit. Fundoscopy shows hypertensive retinopathy grade II.",
+    "diagnosis": "Hypertensive Emergency"
+  },
+  {
+    "chief_complaint": "Increased thirst and urination",
+    "clinical_notes": "Random blood sugar 280 mg/dL. Patient reports weight loss of 5 kg in 2 months. No ketones in urine.",
+    "diagnosis": "Type 2 Diabetes Mellitus - newly diagnosed"
+  }
+]

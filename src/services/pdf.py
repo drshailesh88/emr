@@ -25,8 +25,12 @@ class PDFService:
         prescription: Prescription,
         chief_complaint: str = "",
         doctor_name: str = "Dr. ",
+        doctor_qualifications: str = "",
+        doctor_registration: str = "",
         clinic_name: str = "",
-        clinic_address: str = ""
+        clinic_address: str = "",
+        clinic_phone: str = "",
+        clinic_email: str = ""
     ) -> Optional[str]:
         """Generate a prescription PDF.
 
@@ -51,6 +55,16 @@ class PDFService:
             # Doctor name
             pdf.set_font("Helvetica", "B", 12)
             pdf.cell(0, 8, doctor_name, ln=True, align="C")
+
+            # Doctor qualifications
+            if doctor_qualifications:
+                pdf.set_font("Helvetica", "", 10)
+                pdf.cell(0, 5, doctor_qualifications, ln=True, align="C")
+
+            # Doctor registration
+            if doctor_registration:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.cell(0, 5, f"Reg. No: {doctor_registration}", ln=True, align="C")
 
             # Line separator
             pdf.set_draw_color(0, 0, 0)
@@ -162,7 +176,18 @@ class PDFService:
             pdf.line(10, pdf.get_y(), 200, pdf.get_y())
             pdf.ln(5)
             pdf.set_font("Helvetica", "I", 8)
-            pdf.cell(0, 5, "This is a computer-generated prescription.", ln=True, align="C")
+
+            # Clinic contact info in footer
+            footer_parts = []
+            if clinic_phone:
+                footer_parts.append(f"Phone: {clinic_phone}")
+            if clinic_email:
+                footer_parts.append(f"Email: {clinic_email}")
+
+            if footer_parts:
+                pdf.cell(0, 4, " | ".join(footer_parts), ln=True, align="C")
+
+            pdf.cell(0, 4, "This is a computer-generated prescription.", ln=True, align="C")
 
             # Generate filename
             safe_name = "".join(c for c in patient.name if c.isalnum() or c in " -_")[:30]

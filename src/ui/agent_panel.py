@@ -63,12 +63,21 @@ class AgentPanel:
             color=ft.Colors.GREY_500,
         )
 
+        # Clear chat button
+        clear_btn = ft.IconButton(
+            icon=ft.Icons.DELETE_SWEEP,
+            icon_size=18,
+            tooltip="Clear chat (Ctrl+L)",
+            on_click=lambda e: self.clear_chat(),
+        )
+
         header = ft.Container(
             content=ft.Column([
                 ft.Row([
                     ft.Icon(ft.Icons.SMART_TOY, color=ft.Colors.BLUE_700, size=20),
                     ft.Text("AI Assistant", size=14, weight=ft.FontWeight.BOLD),
-                ], spacing=8),
+                    clear_btn,
+                ], spacing=8, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 self.patient_context,
                 self.doc_count,
             ], spacing=5),
@@ -111,6 +120,7 @@ class AgentPanel:
         self.send_btn = ft.IconButton(
             icon=ft.Icons.SEND,
             icon_color=ft.Colors.BLUE_700,
+            tooltip="Send message (Enter)",
             on_click=self._on_send_click,
         )
 
@@ -266,3 +276,34 @@ class AgentPanel:
                 self.loading_indicator.page.update()
 
         self.on_query(query, callback)
+
+    def clear_chat(self):
+        """Clear the chat history."""
+        # Keep only the welcome message for the current patient
+        if self.current_patient:
+            self.messages = []
+            self.chat_list.controls.clear()
+
+            # Get document count
+            doc_count = self.rag.get_patient_document_count(self.current_patient.id)
+
+            # Re-add welcome message
+            self._add_assistant_message(
+                f"Chat cleared. Still viewing records for {self.current_patient.name}. "
+                f"I have access to {doc_count} records. What would you like to know?"
+            )
+        else:
+            # No patient selected, just show default message
+            self.messages = []
+            self.chat_list.controls.clear()
+            self._add_assistant_message(
+                "Hello! I can help you query this patient's medical records. "
+                "Try asking questions like:\n\n"
+                "• What was his last creatinine?\n"
+                "• When was his last echo done?\n"
+                "• What medications is he on?\n"
+                "• Summarize his cardiac history"
+            )
+
+        if self.chat_list.page:
+            self.chat_list.page.update()

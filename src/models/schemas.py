@@ -72,6 +72,35 @@ class Procedure(BaseModel):
     notes: str = ""
 
 
+class Vitals(BaseModel):
+    """Vitals record schema."""
+    id: Optional[int] = None
+    patient_id: int
+    visit_id: Optional[int] = None
+    recorded_at: Optional[datetime] = None
+
+    # Blood Pressure
+    bp_systolic: Optional[int] = None
+    bp_diastolic: Optional[int] = None
+
+    # Other vitals
+    pulse: Optional[int] = None
+    temperature: Optional[float] = None
+    spo2: Optional[int] = None
+    respiratory_rate: Optional[int] = None
+
+    # Anthropometry
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    bmi: Optional[float] = None
+
+    # Blood Sugar
+    blood_sugar: Optional[float] = None
+    sugar_type: Optional[str] = None  # FBS, RBS, PPBS
+
+    notes: Optional[str] = None
+
+
 class RAGDocument(BaseModel):
     """Document for RAG indexing."""
     id: str

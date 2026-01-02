@@ -1,0 +1,359 @@
+{
+  "phrases": [
+    {
+      "shortcut": "c/o",
+      "expansion": "complains of",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "h/o",
+      "expansion": "history of",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "k/c/o",
+      "expansion": "known case of",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "nkda",
+      "expansion": "no known drug allergies",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "nkfa",
+      "expansion": "no known food allergies",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "nsph",
+      "expansion": "no significant past history",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "nad",
+      "expansion": "no acute distress",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "wdwn",
+      "expansion": "well developed, well nourished",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "heent",
+      "expansion": "Head, Eyes, Ears, Nose, Throat",
+      "category": "Systems"
+    },
+    {
+      "shortcut": "cvs",
+      "expansion": "cardiovascular system",
+      "category": "Systems"
+    },
+    {
+      "shortcut": "rs",
+      "expansion": "respiratory system",
+      "category": "Systems"
+    },
+    {
+      "shortcut": "cns",
+      "expansion": "central nervous system",
+      "category": "Systems"
+    },
+    {
+      "shortcut": "gi",
+      "expansion": "gastrointestinal",
+      "category": "Systems"
+    },
+    {
+      "shortcut": "gu",
+      "expansion": "genitourinary",
+      "category": "Systems"
+    },
+    {
+      "shortcut": "msk",
+      "expansion": "musculoskeletal",
+      "category": "Systems"
+    },
+    {
+      "shortcut": "vitals",
+      "expansion": "Vitals: BP: /mmHg, PR: /min, Temp: °F, SpO2: %",
+      "category": "Examination Templates"
+    },
+    {
+      "shortcut": "pe",
+      "expansion": "Physical Examination:",
+      "category": "Examination Templates"
+    },
+    {
+      "shortcut": "ge",
+      "expansion": "General Examination:",
+      "category": "Examination Templates"
+    },
+    {
+      "shortcut": "od",
+      "expansion": "once daily",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "bd",
+      "expansion": "twice daily",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "tds",
+      "expansion": "thrice daily",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "qid",
+      "expansion": "four times daily",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "hs",
+      "expansion": "at bedtime",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "ac",
+      "expansion": "before meals",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "pc",
+      "expansion": "after meals",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "sos",
+      "expansion": "if needed",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "prn",
+      "expansion": "as required",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "stat",
+      "expansion": "immediately",
+      "category": "Prescriptions"
+    },
+    {
+      "shortcut": "dx",
+      "expansion": "Diagnosis:",
+      "category": "Common Phrases"
+    },
+    {
+      "shortcut": "rx",
+      "expansion": "Prescription:",
+      "category": "Common Phrases"
+    },
+    {
+      "shortcut": "f/u",
+      "expansion": "follow up",
+      "category": "Common Phrases"
+    },
+    {
+      "shortcut": "r/o",
+      "expansion": "rule out",
+      "category": "Common Phrases"
+    },
+    {
+      "shortcut": "s/p",
+      "expansion": "status post",
+      "category": "Common Phrases"
+    },
+    {
+      "shortcut": "w/u",
+      "expansion": "workup",
+      "category": "Common Phrases"
+    },
+    {
+      "shortcut": "htn",
+      "expansion": "hypertension",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "dm",
+      "expansion": "diabetes mellitus",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "ihd",
+      "expansion": "ischemic heart disease",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "ckd",
+      "expansion": "chronic kidney disease",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "copd",
+      "expansion": "chronic obstructive pulmonary disease",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "uti",
+      "expansion": "urinary tract infection",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "urti",
+      "expansion": "upper respiratory tract infection",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "lrti",
+      "expansion": "lower respiratory tract infection",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "cad",
+      "expansion": "coronary artery disease",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "mi",
+      "expansion": "myocardial infarction",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "cvd",
+      "expansion": "cardiovascular disease",
+      "category": "Medical Conditions"
+    },
+    {
+      "shortcut": "pci",
+      "expansion": "percutaneous coronary intervention",
+      "category": "Procedures"
+    },
+    {
+      "shortcut": "cabg",
+      "expansion": "coronary artery bypass graft",
+      "category": "Procedures"
+    },
+    {
+      "shortcut": "pt",
+      "expansion": "patient",
+      "category": "Common Abbreviations"
+    },
+    {
+      "shortcut": "impr",
+      "expansion": "Impression:",
+      "category": "Common Phrases"
+    },
+    {
+      "shortcut": "nvbs",
+      "expansion": "normal vesicular breath sounds",
+      "category": "Examination Findings"
+    },
+    {
+      "shortcut": "s1s2",
+      "expansion": "S1S2 normal",
+      "category": "Examination Findings"
+    },
+    {
+      "shortcut": "cnsi",
+      "expansion": "central nervous system intact",
+      "category": "Examination Findings"
+    },
+    {
+      "shortcut": "abd",
+      "expansion": "abdomen",
+      "category": "Anatomy"
+    },
+    {
+      "shortcut": "bp",
+      "expansion": "blood pressure",
+      "category": "Vitals"
+    },
+    {
+      "shortcut": "pr",
+      "expansion": "pulse rate",
+      "category": "Vitals"
+    },
+    {
+      "shortcut": "rr",
+      "expansion": "respiratory rate",
+      "category": "Vitals"
+    },
+    {
+      "shortcut": "temp",
+      "expansion": "temperature",
+      "category": "Vitals"
+    },
+    {
+      "shortcut": "cbc",
+      "expansion": "complete blood count",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "rbs",
+      "expansion": "random blood sugar",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "fbs",
+      "expansion": "fasting blood sugar",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "ppbs",
+      "expansion": "post-prandial blood sugar",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "hba1c",
+      "expansion": "glycated hemoglobin",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "lft",
+      "expansion": "liver function test",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "kft",
+      "expansion": "kidney function test",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "rft",
+      "expansion": "renal function test",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "ecg",
+      "expansion": "electrocardiogram",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "echo",
+      "expansion": "echocardiography",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "cxr",
+      "expansion": "chest X-ray",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "usg",
+      "expansion": "ultrasonography",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "ct",
+      "expansion": "computed tomography",
+      "category": "Investigations"
+    },
+    {
+      "shortcut": "mri",
+      "expansion": "magnetic resonance imaging",
+      "category": "Investigations"
+    }
+  ]
+}

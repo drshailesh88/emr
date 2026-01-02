@@ -1,0 +1,764 @@
+[
+  {
+    "id": "dm-type2-new",
+    "name": "Type 2 Diabetes - New Diagnosis",
+    "category": "Metabolic",
+    "prescription": {
+      "diagnosis": ["Type 2 Diabetes Mellitus"],
+      "medications": [
+        {
+          "drug_name": "Metformin",
+          "strength": "500mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "30 days",
+          "instructions": "after meals"
+        }
+      ],
+      "investigations": ["FBS", "PPBS", "HbA1c", "Lipid Profile", "Creatinine", "Urine Routine"],
+      "advice": [
+        "Dietary modification - reduce sugar and refined carbs",
+        "Regular exercise - 30 mins walking daily",
+        "Weight reduction if overweight",
+        "Monitor blood sugar regularly"
+      ],
+      "follow_up": "2 weeks with reports",
+      "red_flags": ["Excessive thirst", "Frequent urination", "Blurred vision", "Foot numbness", "Non-healing wounds"]
+    }
+  },
+  {
+    "id": "dm-type2-followup",
+    "name": "Type 2 Diabetes - Follow-up",
+    "category": "Metabolic",
+    "prescription": {
+      "diagnosis": ["Type 2 Diabetes Mellitus - controlled"],
+      "medications": [
+        {
+          "drug_name": "Metformin",
+          "strength": "500mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "60 days",
+          "instructions": "after meals"
+        }
+      ],
+      "investigations": ["FBS", "PPBS", "HbA1c (quarterly)"],
+      "advice": [
+        "Continue diet and exercise",
+        "Maintain blood sugar diary",
+        "Foot care - inspect daily"
+      ],
+      "follow_up": "3 months",
+      "red_flags": ["Hypoglycemic symptoms", "New onset numbness", "Vision changes"]
+    }
+  },
+  {
+    "id": "htn-new",
+    "name": "Hypertension - New",
+    "category": "Cardiac",
+    "prescription": {
+      "diagnosis": ["Essential Hypertension"],
+      "medications": [
+        {
+          "drug_name": "Amlodipine",
+          "strength": "5mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "30 days",
+          "instructions": "after breakfast"
+        }
+      ],
+      "investigations": ["ECG", "2D Echo", "Lipid Profile", "Creatinine", "Electrolytes", "Fundoscopy"],
+      "advice": [
+        "Salt restriction - less than 5g per day",
+        "Regular exercise",
+        "Weight reduction if overweight",
+        "Monitor BP at home - maintain diary"
+      ],
+      "follow_up": "2 weeks with reports",
+      "red_flags": ["Severe headache", "Chest pain", "Breathlessness", "Vision changes"]
+    }
+  },
+  {
+    "id": "htn-controlled",
+    "name": "Hypertension - Controlled",
+    "category": "Cardiac",
+    "prescription": {
+      "diagnosis": ["Essential Hypertension - controlled"],
+      "medications": [
+        {
+          "drug_name": "Amlodipine",
+          "strength": "5mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "60 days",
+          "instructions": "after breakfast"
+        }
+      ],
+      "investigations": [],
+      "advice": [
+        "Continue salt restriction",
+        "Regular exercise",
+        "Maintain BP diary",
+        "Target BP < 140/90 mmHg"
+      ],
+      "follow_up": "2 months",
+      "red_flags": ["Chest pain", "Severe headache", "Palpitations"]
+    }
+  },
+  {
+    "id": "urti-common-cold",
+    "name": "URTI / Common Cold",
+    "category": "Respiratory",
+    "prescription": {
+      "diagnosis": ["Upper Respiratory Tract Infection", "Viral Rhinitis"],
+      "medications": [
+        {
+          "drug_name": "Paracetamol",
+          "strength": "500mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "TDS",
+          "duration": "5 days",
+          "instructions": "after meals if fever/pain"
+        },
+        {
+          "drug_name": "Cetirizine",
+          "strength": "10mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "5 days",
+          "instructions": "at bedtime"
+        }
+      ],
+      "investigations": [],
+      "advice": [
+        "Steam inhalation 2-3 times daily",
+        "Warm salt water gargling",
+        "Adequate hydration - drink warm fluids",
+        "Rest and avoid cold beverages"
+      ],
+      "follow_up": "if symptoms persist beyond 5 days",
+      "red_flags": ["High fever > 102°F", "Breathlessness", "Chest pain", "Blood in sputum"]
+    }
+  },
+  {
+    "id": "acute-gastritis",
+    "name": "Acute Gastritis",
+    "category": "GI",
+    "prescription": {
+      "diagnosis": ["Acute Gastritis"],
+      "medications": [
+        {
+          "drug_name": "Pantoprazole",
+          "strength": "40mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "14 days",
+          "instructions": "30 mins before breakfast"
+        },
+        {
+          "drug_name": "Domperidone",
+          "strength": "10mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "TDS",
+          "duration": "5 days",
+          "instructions": "before meals"
+        }
+      ],
+      "investigations": [],
+      "advice": [
+        "Avoid spicy, oily, and acidic foods",
+        "Small frequent meals",
+        "Avoid NSAIDs, alcohol, smoking",
+        "Eat bland diet - rice, banana, toast"
+      ],
+      "follow_up": "if symptoms persist beyond 1 week",
+      "red_flags": ["Vomiting blood", "Black tarry stools", "Severe abdominal pain"]
+    }
+  },
+  {
+    "id": "acid-peptic-disease",
+    "name": "Acid Peptic Disease",
+    "category": "GI",
+    "prescription": {
+      "diagnosis": ["Acid Peptic Disease", "GERD"],
+      "medications": [
+        {
+          "drug_name": "Pantoprazole",
+          "strength": "40mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "30 days",
+          "instructions": "before meals"
+        },
+        {
+          "drug_name": "Sucralfate",
+          "strength": "1g",
+          "form": "suspension",
+          "dose": "10ml",
+          "frequency": "TDS",
+          "duration": "14 days",
+          "instructions": "before meals"
+        }
+      ],
+      "investigations": ["Upper GI Endoscopy if not done", "H. pylori test"],
+      "advice": [
+        "Avoid spicy, oily foods",
+        "Elevate head end of bed",
+        "Avoid late night meals",
+        "Stop smoking and alcohol",
+        "Avoid NSAIDs"
+      ],
+      "follow_up": "4 weeks",
+      "red_flags": ["Vomiting blood", "Melena", "Severe pain", "Weight loss"]
+    }
+  },
+  {
+    "id": "uti",
+    "name": "Urinary Tract Infection",
+    "category": "Renal",
+    "prescription": {
+      "diagnosis": ["Urinary Tract Infection"],
+      "medications": [
+        {
+          "drug_name": "Nitrofurantoin",
+          "strength": "100mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "5 days",
+          "instructions": "after meals"
+        },
+        {
+          "drug_name": "Potassium Citrate",
+          "strength": "1.4g",
+          "form": "syrup",
+          "dose": "10ml",
+          "frequency": "TDS",
+          "duration": "5 days",
+          "instructions": "dilute in water"
+        }
+      ],
+      "investigations": ["Urine Routine & Microscopy", "Urine Culture if severe"],
+      "advice": [
+        "Drink plenty of water - at least 3 liters daily",
+        "Empty bladder completely",
+        "Maintain genital hygiene",
+        "Avoid holding urine for long"
+      ],
+      "follow_up": "if symptoms persist beyond 3 days",
+      "red_flags": ["High fever with chills", "Flank pain", "Blood in urine", "Vomiting"]
+    }
+  },
+  {
+    "id": "acute-diarrhea",
+    "name": "Acute Diarrhea",
+    "category": "GI",
+    "prescription": {
+      "diagnosis": ["Acute Gastroenteritis"],
+      "medications": [
+        {
+          "drug_name": "ORS",
+          "strength": "sachets",
+          "form": "powder",
+          "dose": "1 sachet",
+          "frequency": "after each loose stool",
+          "duration": "5 days",
+          "instructions": "dissolve in 1 liter water"
+        },
+        {
+          "drug_name": "Zinc Sulfate",
+          "strength": "20mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "14 days",
+          "instructions": "after meals"
+        },
+        {
+          "drug_name": "Loperamide",
+          "strength": "2mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "after each loose stool (max 8/day)",
+          "duration": "as needed",
+          "instructions": "if needed"
+        }
+      ],
+      "investigations": ["Stool routine if persistent"],
+      "advice": [
+        "Maintain hydration - ORS, rice water, buttermilk",
+        "Eat bland diet - rice, banana, curd, toast",
+        "Avoid milk, oily foods temporarily",
+        "Maintain hand hygiene"
+      ],
+      "follow_up": "if not improving in 3 days",
+      "red_flags": ["Blood in stools", "High fever", "Severe dehydration", "Decreased urine output"]
+    }
+  },
+  {
+    "id": "allergic-rhinitis",
+    "name": "Allergic Rhinitis",
+    "category": "Respiratory",
+    "prescription": {
+      "diagnosis": ["Allergic Rhinitis"],
+      "medications": [
+        {
+          "drug_name": "Cetirizine",
+          "strength": "10mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "14 days",
+          "instructions": "at bedtime"
+        },
+        {
+          "drug_name": "Mometasone",
+          "strength": "50mcg",
+          "form": "nasal spray",
+          "dose": "2 puffs",
+          "frequency": "BD",
+          "duration": "14 days",
+          "instructions": "in each nostril"
+        }
+      ],
+      "investigations": ["Absolute Eosinophil Count if needed"],
+      "advice": [
+        "Avoid dust, pollen, smoke exposure",
+        "Use dust-proof pillow covers",
+        "Keep windows closed during high pollen season",
+        "Steam inhalation can help"
+      ],
+      "follow_up": "2 weeks if not improving",
+      "red_flags": ["Breathlessness", "Wheezing", "Facial swelling"]
+    }
+  },
+  {
+    "id": "bronchial-asthma",
+    "name": "Bronchial Asthma",
+    "category": "Respiratory",
+    "prescription": {
+      "diagnosis": ["Bronchial Asthma"],
+      "medications": [
+        {
+          "drug_name": "Salbutamol",
+          "strength": "100mcg",
+          "form": "inhaler",
+          "dose": "2 puffs",
+          "frequency": "QID",
+          "duration": "30 days",
+          "instructions": "as needed for breathlessness"
+        },
+        {
+          "drug_name": "Budesonide + Formoterol",
+          "strength": "200/6mcg",
+          "form": "inhaler",
+          "dose": "2 puffs",
+          "frequency": "BD",
+          "duration": "30 days",
+          "instructions": "rinse mouth after use"
+        },
+        {
+          "drug_name": "Montelukast",
+          "strength": "10mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "30 days",
+          "instructions": "at bedtime"
+        }
+      ],
+      "investigations": ["Pulmonary Function Test", "Chest X-ray if not done"],
+      "advice": [
+        "Avoid triggers - dust, smoke, cold air",
+        "Use spacer with inhaler",
+        "Peak flow monitoring at home",
+        "Breathing exercises",
+        "Keep rescue inhaler always available"
+      ],
+      "follow_up": "2 weeks",
+      "red_flags": ["Severe breathlessness at rest", "Unable to speak", "Bluish discoloration", "No relief with inhaler"]
+    }
+  },
+  {
+    "id": "migraine",
+    "name": "Migraine",
+    "category": "Neuro",
+    "prescription": {
+      "diagnosis": ["Migraine"],
+      "medications": [
+        {
+          "drug_name": "Sumatriptan",
+          "strength": "50mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "SOS",
+          "duration": "as needed",
+          "instructions": "at onset of headache"
+        },
+        {
+          "drug_name": "Propranolol",
+          "strength": "40mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "60 days",
+          "instructions": "after meals (prophylaxis)"
+        },
+        {
+          "drug_name": "Naproxen",
+          "strength": "250mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "SOS",
+          "duration": "as needed",
+          "instructions": "after meals if needed"
+        }
+      ],
+      "investigations": ["MRI Brain if first episode or atypical features"],
+      "advice": [
+        "Maintain headache diary - identify triggers",
+        "Avoid triggers - stress, lack of sleep, certain foods",
+        "Regular sleep schedule",
+        "Stay hydrated",
+        "Relaxation techniques and yoga"
+      ],
+      "follow_up": "4 weeks",
+      "red_flags": ["Sudden severe headache", "Neurological deficits", "Fever with headache", "Changed pattern of headache"]
+    }
+  },
+  {
+    "id": "low-back-pain",
+    "name": "Low Back Pain",
+    "category": "Musculoskeletal",
+    "prescription": {
+      "diagnosis": ["Mechanical Low Back Pain"],
+      "medications": [
+        {
+          "drug_name": "Diclofenac",
+          "strength": "50mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "5 days",
+          "instructions": "after meals"
+        },
+        {
+          "drug_name": "Thiocolchicoside",
+          "strength": "4mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "5 days",
+          "instructions": "after meals"
+        },
+        {
+          "drug_name": "Diclofenac",
+          "strength": "gel",
+          "form": "topical",
+          "dose": "apply",
+          "frequency": "TDS",
+          "duration": "7 days",
+          "instructions": "local application"
+        }
+      ],
+      "investigations": ["X-ray LS Spine if persistent", "MRI if red flags present"],
+      "advice": [
+        "Bed rest for 2-3 days if acute",
+        "Hot fomentation",
+        "Avoid heavy lifting",
+        "Back strengthening exercises after acute phase",
+        "Maintain proper posture"
+      ],
+      "follow_up": "1 week if not improving",
+      "red_flags": ["Leg weakness", "Bladder/bowel disturbance", "Fever", "Saddle anesthesia", "Progressive neurological deficit"]
+    }
+  },
+  {
+    "id": "osteoarthritis",
+    "name": "Osteoarthritis",
+    "category": "Musculoskeletal",
+    "prescription": {
+      "diagnosis": ["Osteoarthritis - Knee"],
+      "medications": [
+        {
+          "drug_name": "Paracetamol",
+          "strength": "650mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "TDS",
+          "duration": "30 days",
+          "instructions": "after meals"
+        },
+        {
+          "drug_name": "Glucosamine + Chondroitin",
+          "strength": "500/400mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "90 days",
+          "instructions": "after meals"
+        },
+        {
+          "drug_name": "Calcium + Vitamin D3",
+          "strength": "500/250IU",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "90 days",
+          "instructions": "after dinner"
+        }
+      ],
+      "investigations": ["X-ray affected joint", "Vitamin D levels"],
+      "advice": [
+        "Weight reduction if overweight",
+        "Quadriceps strengthening exercises",
+        "Avoid climbing stairs and squatting",
+        "Hot fomentation for pain relief",
+        "Use walking stick if needed"
+      ],
+      "follow_up": "4 weeks",
+      "red_flags": ["Severe pain at rest", "Joint swelling with fever", "Inability to bear weight"]
+    }
+  },
+  {
+    "id": "iron-deficiency-anemia",
+    "name": "Iron Deficiency Anemia",
+    "category": "Hematology",
+    "prescription": {
+      "diagnosis": ["Iron Deficiency Anemia"],
+      "medications": [
+        {
+          "drug_name": "Ferrous Sulfate",
+          "strength": "200mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "90 days",
+          "instructions": "1 hour before meals with Vitamin C"
+        },
+        {
+          "drug_name": "Folic Acid",
+          "strength": "5mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "90 days",
+          "instructions": "after breakfast"
+        }
+      ],
+      "investigations": ["CBC", "Iron studies", "Peripheral smear", "Stool occult blood if indicated"],
+      "advice": [
+        "Iron rich diet - green leafy vegetables, jaggery, dates",
+        "Vitamin C helps iron absorption",
+        "Avoid tea/coffee with meals",
+        "Dark stools are normal with iron tablets",
+        "Address underlying cause"
+      ],
+      "follow_up": "4 weeks with CBC",
+      "red_flags": ["Blood in stools", "Heavy menstrual bleeding", "Severe fatigue", "Palpitations"]
+    }
+  },
+  {
+    "id": "hypothyroidism",
+    "name": "Hypothyroidism",
+    "category": "Metabolic",
+    "prescription": {
+      "diagnosis": ["Primary Hypothyroidism"],
+      "medications": [
+        {
+          "drug_name": "Levothyroxine",
+          "strength": "50mcg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "60 days",
+          "instructions": "empty stomach, 30 mins before breakfast"
+        }
+      ],
+      "investigations": ["TSH", "Free T3", "Free T4", "Lipid Profile"],
+      "advice": [
+        "Take medication on empty stomach",
+        "Avoid calcium/iron supplements with thyroid medication",
+        "Regular monitoring of TSH",
+        "Lifelong treatment usually required",
+        "Maintain healthy weight"
+      ],
+      "follow_up": "6 weeks with TSH",
+      "red_flags": ["Chest pain", "Irregular heartbeat", "Severe fatigue"]
+    }
+  },
+  {
+    "id": "anxiety-disorder",
+    "name": "Anxiety Disorder",
+    "category": "Psychiatry",
+    "prescription": {
+      "diagnosis": ["Generalized Anxiety Disorder"],
+      "medications": [
+        {
+          "drug_name": "Escitalopram",
+          "strength": "10mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "30 days",
+          "instructions": "after breakfast"
+        },
+        {
+          "drug_name": "Clonazepam",
+          "strength": "0.5mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "14 days",
+          "instructions": "after meals (short term)"
+        }
+      ],
+      "investigations": ["Thyroid function test to rule out thyroid disorder"],
+      "advice": [
+        "Cognitive behavioral therapy recommended",
+        "Regular exercise and yoga",
+        "Relaxation techniques - deep breathing",
+        "Avoid caffeine and alcohol",
+        "Maintain regular sleep schedule",
+        "Stress management techniques"
+      ],
+      "follow_up": "2 weeks",
+      "red_flags": ["Suicidal thoughts", "Severe panic attacks", "Unable to function"]
+    }
+  },
+  {
+    "id": "insomnia",
+    "name": "Insomnia",
+    "category": "Psychiatry",
+    "prescription": {
+      "diagnosis": ["Primary Insomnia"],
+      "medications": [
+        {
+          "drug_name": "Zolpidem",
+          "strength": "10mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "7 days",
+          "instructions": "at bedtime (short term use only)"
+        },
+        {
+          "drug_name": "Melatonin",
+          "strength": "3mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "OD",
+          "duration": "30 days",
+          "instructions": "30 mins before sleep"
+        }
+      ],
+      "investigations": ["Rule out depression, anxiety, thyroid disorder if chronic"],
+      "advice": [
+        "Sleep hygiene - regular sleep schedule",
+        "Avoid screen time 1 hour before bed",
+        "No caffeine after 4 PM",
+        "Dark, quiet bedroom",
+        "Relaxation techniques before bed",
+        "Avoid daytime naps",
+        "Exercise regularly but not close to bedtime"
+      ],
+      "follow_up": "2 weeks",
+      "red_flags": ["Depression symptoms", "Excessive daytime sleepiness", "Sleep apnea symptoms"]
+    }
+  },
+  {
+    "id": "skin-infection-cellulitis",
+    "name": "Skin Infection (Cellulitis)",
+    "category": "Dermatology",
+    "prescription": {
+      "diagnosis": ["Cellulitis"],
+      "medications": [
+        {
+          "drug_name": "Amoxicillin + Clavulanate",
+          "strength": "625mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "7 days",
+          "instructions": "after meals"
+        },
+        {
+          "drug_name": "Diclofenac",
+          "strength": "50mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "5 days",
+          "instructions": "after meals for pain/inflammation"
+        },
+        {
+          "drug_name": "Mupirocin",
+          "strength": "2%",
+          "form": "ointment",
+          "dose": "apply",
+          "frequency": "BD",
+          "duration": "7 days",
+          "instructions": "local application"
+        }
+      ],
+      "investigations": ["Blood sugar if diabetic or recurrent infections", "Culture if not responding"],
+      "advice": [
+        "Keep affected area elevated",
+        "Mark borders to monitor spread",
+        "Keep area clean and dry",
+        "Avoid tight clothing over affected area",
+        "Complete antibiotic course"
+      ],
+      "follow_up": "3 days to check response",
+      "red_flags": ["Spreading redness", "Fever with chills", "Blisters/black areas", "Severe pain", "Diabetic patient"]
+    }
+  },
+  {
+    "id": "viral-fever",
+    "name": "Viral Fever",
+    "category": "Infectious",
+    "prescription": {
+      "diagnosis": ["Viral Fever"],
+      "medications": [
+        {
+          "drug_name": "Paracetamol",
+          "strength": "500mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "TDS",
+          "duration": "5 days",
+          "instructions": "after meals when fever present"
+        },
+        {
+          "drug_name": "Vitamin C",
+          "strength": "500mg",
+          "form": "tablet",
+          "dose": "1",
+          "frequency": "BD",
+          "duration": "5 days",
+          "instructions": "after meals"
+        }
+      ],
+      "investigations": ["CBC if fever > 3 days", "Dengue/Malaria test if endemic area and persistent fever"],
+      "advice": [
+        "Adequate rest",
+        "Drink plenty of fluids",
+        "Sponge with tepid water if fever high",
+        "Nutritious diet",
+        "Avoid self-medication with antibiotics"
+      ],
+      "follow_up": "if fever persists beyond 3 days",
+      "red_flags": ["High fever > 103°F", "Severe headache", "Rash", "Bleeding manifestations", "Altered sensorium", "Breathlessness"]
+    }
+  }
+]
