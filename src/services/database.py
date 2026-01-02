@@ -210,6 +210,54 @@ class DatabaseService:
                 )
             """)
 
+            # Drug interactions table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS drug_interactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    drug1_generic TEXT NOT NULL,
+                    drug2_generic TEXT NOT NULL,
+                    severity TEXT CHECK (severity IN ('Minor', 'Moderate', 'Severe', 'Contraindicated')),
+                    effect TEXT,
+                    mechanism TEXT,
+                    recommendation TEXT,
+                    UNIQUE(drug1_generic, drug2_generic)
+                )
+            """)
+
+            # Interaction overrides table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS interaction_overrides (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER,
+                    visit_id INTEGER,
+                    drug1 TEXT,
+                    drug2 TEXT,
+                    severity TEXT,
+                    reason TEXT NOT NULL,
+                    overridden_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (patient_id) REFERENCES patients(id),
+                    FOREIGN KEY (visit_id) REFERENCES visits(id)
+                )
+            """)
+
+            # Clinical alerts table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    alert_type TEXT NOT NULL,
+                    severity TEXT CHECK (severity IN ('info', 'warning', 'critical')),
+                    title TEXT NOT NULL,
+                    message TEXT,
+                    triggered_at TEXT DEFAULT (datetime('now')),
+                    acknowledged_at TEXT,
+                    acknowledged_action TEXT,
+                    snoozed_until TEXT,
+                    is_resolved INTEGER DEFAULT 0,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+
             # Create indexes for faster search
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(name)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id)")
@@ -229,6 +277,10 @@ class DatabaseService:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_date ON appointments(appointment_date)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_patient ON appointments(patient_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_status ON appointments(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_interactions_drug1 ON drug_interactions(drug1_generic)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_interactions_drug2 ON drug_interactions(drug2_generic)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(is_resolved, snoozed_until)")
 
             # Add is_deleted column to existing tables if not exists
             self._add_column_if_not_exists(cursor, "patients", "is_deleted", "INTEGER DEFAULT 0")
@@ -1565,3 +1617,258 @@ class DatabaseService:
             if row:
                 return row[0]
             return None
+
+    # ==================== DRUG INTERACTIONS ====================
+
+    def load_drug_interactions(self, interactions_data: list[dict]):
+        """Load drug interactions from JSON data."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for item in interactions_data:
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO drug_interactions
+                        (drug1_generic, drug2_generic, severity, effect, mechanism, recommendation)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        item['drug1'],
+                        item['drug2'],
+                        item['severity'],
+                        item.get('effect', ''),
+                        item.get('mechanism', ''),
+                        item.get('recommendation', '')
+                    ))
+                except Exception:
+                    pass  # Skip duplicates
+
+    def check_drug_interactions(self, drugs: list[str]) -> list[dict]:
+        """Check for interactions between a list of drugs.
+
+        Args:
+            drugs: List of drug names (generic)
+
+        Returns:
+            List of interaction dicts with severity, effect, etc.
+        """
+        if len(drugs) < 2:
+            return []
+
+        interactions = []
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check all pairs
+            for i in range(len(drugs)):
+                for j in range(i + 1, len(drugs)):
+                    drug1 = drugs[i].lower()
+                    drug2 = drugs[j].lower()
+
+                    # Search for interaction in either direction
+                    cursor.execute("""
+                        SELECT * FROM drug_interactions
+                        WHERE (LOWER(drug1_generic) LIKE ? AND LOWER(drug2_generic) LIKE ?)
+                           OR (LOWER(drug1_generic) LIKE ? AND LOWER(drug2_generic) LIKE ?)
+                    """, (f'%{drug1}%', f'%{drug2}%', f'%{drug2}%', f'%{drug1}%'))
+
+                    row = cursor.fetchone()
+                    if row:
+                        interactions.append({
+                            'drug1': drugs[i],
+                            'drug2': drugs[j],
+                            'severity': row['severity'],
+                            'effect': row['effect'],
+                            'mechanism': row['mechanism'],
+                            'recommendation': row['recommendation']
+                        })
+
+        # Sort by severity (Contraindicated first, then Severe, etc.)
+        severity_order = {'Contraindicated': 0, 'Severe': 1, 'Moderate': 2, 'Minor': 3}
+        interactions.sort(key=lambda x: severity_order.get(x['severity'], 4))
+
+        return interactions
+
+    def check_against_current_meds(self, patient_id: int, new_drugs: list[str]) -> list[dict]:
+        """Check new drugs against patient's current medications.
+
+        Args:
+            patient_id: Patient ID
+            new_drugs: List of new drug names
+
+        Returns:
+            List of interactions with current medications
+        """
+        # Get medications from recent visits (last 6 months)
+        current_meds = set()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT prescription_json FROM visits
+                WHERE patient_id = ?
+                  AND is_deleted = 0
+                  AND visit_date >= date('now', '-6 months')
+                ORDER BY visit_date DESC
+            """, (patient_id,))
+
+            for row in cursor.fetchall():
+                if row['prescription_json']:
+                    try:
+                        rx = json.loads(row['prescription_json'])
+                        for med in rx.get('medications', []):
+                            drug_name = med.get('drug_name', '')
+                            if drug_name:
+                                current_meds.add(drug_name)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+        # Combine current meds with new drugs and check
+        all_drugs = list(current_meds) + new_drugs
+        return self.check_drug_interactions(all_drugs)
+
+    def log_interaction_override(self, patient_id: int, visit_id: int,
+                                  drug1: str, drug2: str, severity: str, reason: str):
+        """Log when doctor overrides an interaction warning."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO interaction_overrides
+                (patient_id, visit_id, drug1, drug2, severity, reason)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (patient_id, visit_id, drug1, drug2, severity, reason))
+
+    # ==================== CLINICAL ALERTS ====================
+
+    def create_alert(self, patient_id: int, alert_type: str, severity: str,
+                     title: str, message: str) -> int:
+        """Create a new clinical alert."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO alerts (patient_id, alert_type, severity, title, message)
+                VALUES (?, ?, ?, ?, ?)
+            """, (patient_id, alert_type, severity, title, message))
+            return cursor.lastrowid
+
+    def get_active_alerts(self, patient_id: int) -> list[dict]:
+        """Get unacknowledged alerts for patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM alerts
+                WHERE patient_id = ?
+                  AND is_resolved = 0
+                  AND (snoozed_until IS NULL OR snoozed_until < datetime('now'))
+                ORDER BY
+                    CASE severity
+                        WHEN 'critical' THEN 0
+                        WHEN 'warning' THEN 1
+                        ELSE 2
+                    END,
+                    triggered_at DESC
+            """, (patient_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def acknowledge_alert(self, alert_id: int, action: str):
+        """Mark alert as acknowledged with action taken."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE alerts
+                SET acknowledged_at = datetime('now'),
+                    acknowledged_action = ?,
+                    is_resolved = 1
+                WHERE id = ?
+            """, (action, alert_id))
+
+    def snooze_alert(self, alert_id: int, hours: int):
+        """Snooze alert for N hours."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE alerts
+                SET snoozed_until = datetime('now', '+' || ? || ' hours')
+                WHERE id = ?
+            """, (hours, alert_id))
+
+    # ==================== APPOINTMENTS ====================
+
+    def add_appointment(self, patient_id: int, date: str, time: str = None,
+                        appt_type: str = "follow-up", notes: str = None) -> int:
+        """Add a new appointment."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO appointments
+                (patient_id, appointment_date, appointment_time, appointment_type, notes)
+                VALUES (?, ?, ?, ?, ?)
+            """, (patient_id, date, time, appt_type, notes))
+            return cursor.lastrowid
+
+    def get_appointments_for_date(self, date: str) -> list[dict]:
+        """Get all appointments for a specific date."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT a.*, p.name as patient_name, p.phone as patient_phone
+                FROM appointments a
+                JOIN patients p ON a.patient_id = p.id
+                WHERE a.appointment_date = ?
+                  AND a.is_deleted = 0
+                ORDER BY a.appointment_time
+            """, (date,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_todays_appointments(self) -> list[dict]:
+        """Get today's appointments."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        return self.get_appointments_for_date(today)
+
+    def get_patient_appointments(self, patient_id: int, include_past: bool = False) -> list[dict]:
+        """Get appointments for a patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if include_past:
+                cursor.execute("""
+                    SELECT * FROM appointments
+                    WHERE patient_id = ? AND is_deleted = 0
+                    ORDER BY appointment_date DESC, appointment_time DESC
+                """, (patient_id,))
+            else:
+                cursor.execute("""
+                    SELECT * FROM appointments
+                    WHERE patient_id = ?
+                      AND is_deleted = 0
+                      AND appointment_date >= date('now')
+                    ORDER BY appointment_date, appointment_time
+                """, (patient_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_next_appointment(self, patient_id: int) -> dict | None:
+        """Get next upcoming appointment for patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM appointments
+                WHERE patient_id = ?
+                  AND is_deleted = 0
+                  AND appointment_date >= date('now')
+                ORDER BY appointment_date, appointment_time
+                LIMIT 1
+            """, (patient_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def update_appointment_status(self, appt_id: int, status: str):
+        """Update appointment status."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE appointments SET status = ? WHERE id = ?
+            """, (status, appt_id))
+
+    def cancel_appointment(self, appt_id: int):
+        """Cancel (soft delete) an appointment."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE appointments SET is_deleted = 1, status = 'cancelled' WHERE id = ?
+            """, (appt_id,))
