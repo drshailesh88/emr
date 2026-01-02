@@ -19,6 +19,8 @@ from ..services.trend_calculator import calculate_trend, prepare_chart_data
 from .flowsheet_panel import ConditionManager
 from .whatsapp_share_dialog import show_whatsapp_share
 from .appointment_panel import show_schedule_followup
+from .components.voice_input import VoiceInputButton
+from ..services.voice import is_voice_available
 
 
 class CentralPanel:
@@ -123,6 +125,23 @@ class CentralPanel:
             text_size=13,
         )
 
+        # Voice input button for notes
+        self.voice_btn = VoiceInputButton(
+            on_text=self._on_voice_text,
+            size=40,
+            tooltip="Voice dictation - click to start/stop"
+        )
+
+        # Notes field with voice button
+        self.notes_container = ft.Row([
+            ft.Container(content=self.notes_field, expand=True),
+            ft.Container(
+                content=self.voice_btn,
+                alignment=ft.alignment.top_center,
+                padding=ft.padding.only(top=5),
+            ),
+        ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.START)
+
         # Loading indicator
         self.loading_indicator = ft.ProgressRing(visible=False, width=20, height=20)
 
@@ -204,7 +223,7 @@ class CentralPanel:
             content=ft.Column([
                 self.vitals_section,
                 self.complaint_field,
-                self.notes_field,
+                self.notes_container,
                 ft.Row([
                     self.templates_btn,
                     self.generate_btn,
@@ -1690,6 +1709,25 @@ class CentralPanel:
             pdf_path=pdf_path,
             on_shared=lambda: self._show_snackbar("Prescription shared via WhatsApp")
         )
+
+    def _on_voice_text(self, text: str):
+        """Handle voice transcription - insert into notes field."""
+        if not text:
+            return
+
+        # Get current value and cursor position
+        current = self.notes_field.value or ""
+
+        # Add space if needed before inserting
+        if current and not current.endswith((' ', '\n', '.')):
+            text = " " + text
+
+        # Append transcribed text
+        self.notes_field.value = current + text
+
+        # Update the field
+        if self.notes_field.page:
+            self.notes_field.update()
 
     def _show_snackbar(self, message: str, error: bool = False):
         """Show a snackbar message."""
