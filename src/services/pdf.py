@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import date
 from typing import Optional
 import json
+import os
 
 from ..models.schemas import Patient, Prescription
 
@@ -12,7 +13,9 @@ from ..models.schemas import Patient, Prescription
 class PDFService:
     """Generates prescription PDFs."""
 
-    def __init__(self, output_dir: str = "data/prescriptions"):
+    def __init__(self, output_dir: Optional[str] = None):
+        if output_dir is None:
+            output_dir = os.getenv("DOCASSIST_PDF_DIR", "data/prescriptions")
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

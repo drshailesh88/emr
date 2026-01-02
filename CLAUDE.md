@@ -4,6 +4,9 @@
 A local-first EMR for Indian doctors that runs entirely offline with local LLM.
 Core differentiator: Natural language search and RAG on patient records.
 
+## Instruction Sync
+- Any change to project instructions must be replicated across `CLAUDE.md`, `AGENTS.md`, `CODEX.md`, `GEMINI.md`, and `GROK.md`.
+
 ## Tech Stack (FIXED - DO NOT CHANGE)
 - **Language**: Python 3.11+
 - **GUI**: Flet (NOT Tkinter, NOT PyQt, NOT Electron)

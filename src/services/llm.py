@@ -1,6 +1,7 @@
 """Local LLM service via Ollama with RAM-based model selection."""
 
 import json
+import os
 import requests
 import psutil
 from typing import Optional, Tuple
@@ -19,7 +20,9 @@ class LLMService:
         (float("inf"), "qwen2.5:7b"),  # > 10GB RAM
     ]
 
-    def __init__(self, base_url: str = "http://localhost:11434"):
+    def __init__(self, base_url: Optional[str] = None):
+        if base_url is None:
+            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.base_url = base_url
         self.model = self._select_model()
         self._load_prompts()

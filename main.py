@@ -17,8 +17,16 @@ Requirements:
 import sys
 import os
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+if load_dotenv:
+    load_dotenv()
 
 from src.ui.app import run_app
 
@@ -45,7 +53,7 @@ def check_ollama():
 
 def check_dependencies():
     """Check if required packages are installed."""
-    required = ['flet', 'requests', 'pydantic', 'chromadb', 'fpdf', 'psutil']
+    required = ['flet', 'requests', 'pydantic', 'chromadb', 'fpdf', 'psutil', 'dotenv']
     missing = []
 
     for package in required:

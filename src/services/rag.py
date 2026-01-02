@@ -5,12 +5,15 @@ from chromadb.config import Settings
 from pathlib import Path
 from typing import List, Tuple, Optional
 import hashlib
+import os
 
 
 class RAGService:
     """Handles vector storage and retrieval for patient records."""
 
-    def __init__(self, persist_directory: str = "data/chroma"):
+    def __init__(self, persist_directory: Optional[str] = None):
+        if persist_directory is None:
+            persist_directory = os.getenv("DOCASSIST_CHROMA_DIR", "data/chroma")
         self.persist_dir = Path(persist_directory)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
 

@@ -2,6 +2,7 @@
 
 import sqlite3
 import json
+import os
 from pathlib import Path
 from datetime import datetime, date
 from typing import List, Optional, Tuple
@@ -13,7 +14,9 @@ from ..models.schemas import Patient, Visit, Investigation, Procedure
 class DatabaseService:
     """Handles all SQLite database operations."""
 
-    def __init__(self, db_path: str = "data/clinic.db"):
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is None:
+            db_path = os.getenv("DOCASSIST_DB_PATH", "data/clinic.db")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
