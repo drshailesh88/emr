@@ -17,6 +17,7 @@ from .lab_trends_dialog import LabTrendsDialog
 from ..services.reference_ranges import TREND_PANELS, get_reference_range
 from ..services.trend_calculator import calculate_trend, prepare_chart_data
 from .flowsheet_panel import ConditionManager
+from .whatsapp_share_dialog import show_whatsapp_share
 
 
 class CentralPanel:
@@ -175,6 +176,19 @@ class CentralPanel:
             disabled=True,
         )
 
+        # WhatsApp share button
+        self.whatsapp_btn = ft.ElevatedButton(
+            text="Share WhatsApp",
+            icon=ft.Icons.CHAT,
+            tooltip="Share prescription via WhatsApp",
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.GREEN_700,
+                color=ft.Colors.WHITE,
+            ),
+            on_click=self._on_whatsapp_click,
+            disabled=True,
+        )
+
         # Save as template button
         self.save_template_btn = ft.ElevatedButton(
             text="Save as Template",
@@ -207,6 +221,7 @@ class CentralPanel:
                 ft.Row([
                     self.save_btn,
                     self.print_btn,
+                    self.whatsapp_btn,
                     self.save_template_btn,
                 ], spacing=10),
             ], spacing=15, expand=True),
@@ -654,6 +669,7 @@ class CentralPanel:
         self.templates_btn.disabled = False
         self.save_btn.disabled = True
         self.print_btn.disabled = True
+        self.whatsapp_btn.disabled = True
         self.save_template_btn.disabled = True
 
         # Clear fields
@@ -958,6 +974,7 @@ class CentralPanel:
                 self._display_prescription(self.current_prescription)
                 self.save_btn.disabled = False
                 self.print_btn.disabled = False
+                self.whatsapp_btn.disabled = False
                 self.save_template_btn.disabled = False
             except:
                 pass
@@ -1455,6 +1472,7 @@ class CentralPanel:
                 self._display_prescription(prescription)
                 self.save_btn.disabled = False
                 self.print_btn.disabled = False
+                self.whatsapp_btn.disabled = False
                 self.save_template_btn.disabled = False
             else:
                 self.rx_display.controls.clear()
@@ -1618,8 +1636,27 @@ class CentralPanel:
 
         if filepath:
             self._show_snackbar(f"PDF saved: {filepath}")
+            # Store for WhatsApp sharing
+            self._last_pdf_path = filepath
         else:
             self._show_snackbar("Failed to generate PDF", error=True)
+
+    def _on_whatsapp_click(self, e):
+        """Handle WhatsApp share click."""
+        if not self.current_prescription or not self.current_patient:
+            return
+
+        # Get PDF path if available
+        pdf_path = getattr(self, '_last_pdf_path', None)
+
+        # Show share dialog
+        show_whatsapp_share(
+            page=e.page,
+            patient=self.current_patient,
+            prescription=self.current_prescription,
+            pdf_path=pdf_path,
+            on_shared=lambda: self._show_snackbar("Prescription shared via WhatsApp")
+        )
 
     def _show_snackbar(self, message: str, error: bool = False):
         """Show a snackbar message."""
@@ -1645,9 +1682,10 @@ class CentralPanel:
             # Display the prescription
             self._display_prescription(self.current_prescription)
 
-            # Enable save and print buttons
+            # Enable save, print, and share buttons
             self.save_btn.disabled = False
             self.print_btn.disabled = False
+            self.whatsapp_btn.disabled = False
             self.save_template_btn.disabled = False
 
             if self.tabs and self.tabs.page:
