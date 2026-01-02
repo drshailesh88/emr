@@ -16,6 +16,7 @@ from .template_browser import TemplateBrowser, SaveTemplateDialog
 from .lab_trends_dialog import LabTrendsDialog
 from ..services.reference_ranges import TREND_PANELS, get_reference_range
 from ..services.trend_calculator import calculate_trend, prepare_chart_data
+from .flowsheet_panel import ConditionManager
 
 
 class CentralPanel:
@@ -71,6 +72,7 @@ class CentralPanel:
         self.procedures_list: Optional[ft.ListView] = None
         self.vitals_history_list: Optional[ft.ListView] = None
         self.trends_container: Optional[ft.Container] = None
+        self.flowsheets_container: Optional[ft.Container] = None
 
         # Audit dialog
         self.audit_dialog = AuditHistoryDialog(db)
@@ -300,6 +302,19 @@ class CentralPanel:
             expand=True,
         )
 
+        # Flowsheets tab content (for chronic disease management)
+        self.flowsheets_container = ft.Container(
+            content=ft.Text(
+                "Select a patient to view chronic disease flowsheets",
+                size=14,
+                color=ft.Colors.GREY_600,
+                italic=True
+            ),
+            padding=20,
+            alignment=ft.alignment.center,
+            expand=True,
+        )
+
         # Tabs
         self.tabs = ft.Tabs(
             selected_index=0,
@@ -333,6 +348,11 @@ class CentralPanel:
                     text="Procedures",
                     icon=ft.Icons.MEDICAL_SERVICES,
                     content=procedures_tab_content,
+                ),
+                ft.Tab(
+                    text="Flowsheets",
+                    icon=ft.Icons.MONITOR_HEART,
+                    content=self.flowsheets_container,
                 ),
             ],
             expand=True,
@@ -654,6 +674,7 @@ class CentralPanel:
         self._refresh_procedures()
         self._refresh_vitals_history()
         self._refresh_trends()
+        self._refresh_flowsheets()
 
         if self.patient_header.page:
             self.patient_header.page.update()
@@ -815,6 +836,22 @@ class CentralPanel:
 
         if self.trends_container.page:
             self.trends_container.update()
+
+    def _refresh_flowsheets(self):
+        """Refresh the flowsheets tab with chronic condition management."""
+        if not self.flowsheets_container or not self.current_patient:
+            return
+
+        # Build condition manager for this patient
+        condition_manager = ConditionManager(
+            db=self.db,
+            patient_id=self.current_patient.id
+        )
+
+        self.flowsheets_container.content = condition_manager.build()
+
+        if self.flowsheets_container.page:
+            self.flowsheets_container.update()
 
     def set_visits(self, visits: List[Visit]):
         """Set visits for history tab."""
