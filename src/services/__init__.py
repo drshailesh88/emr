@@ -9,3 +9,5 @@ from .sync import (
     StorageBackend, LocalStorageBackend, S3StorageBackend, DocAssistCloudBackend,
     get_or_create_device_id
 )
+from .settings import SettingsService, BackupSettings, DoctorSettings, AppSettings
+from .scheduler import BackupScheduler
