@@ -1,14 +1,38 @@
 """Main Flet application with 3-panel layout."""
 
 import flet as ft
-from typing import Optional
+from typing import Optional, List
 import threading
 
 from ..services.database import DatabaseService
-from ..services.llm import LLMService
-from ..services.rag import RAGService
-from ..services.pdf import PDFService
-from ..models.schemas import Patient, Visit, Prescription
+from ..services.phonetic import MultiStrategySearch
+from ..services.safety import PrescriptionSafetyChecker
+from ..services.context_builder import ContextBuilder
+from ..services.app_mode import (
+    get_mode_manager,
+    get_current_mode,
+    get_capabilities,
+    can_use_llm,
+    can_use_rag,
+    AppMode,
+)
+from ..models.schemas import Patient, Visit, Prescription, PatientSnapshot, SafetyAlert
+
+# Optional imports based on availability
+try:
+    from ..services.llm import LLMService
+except ImportError:
+    LLMService = None
+
+try:
+    from ..services.rag import RAGService
+except ImportError:
+    RAGService = None
+
+try:
+    from ..services.pdf import PDFService
+except ImportError:
+    PDFService = None
 
 from .patient_panel import PatientPanel
 from .central_panel import CentralPanel
@@ -19,12 +43,42 @@ class DocAssistApp:
     """Main application class."""
 
     def __init__(self):
+        # Get app mode
+        self.mode_manager = get_mode_manager()
+        self.capabilities = get_capabilities()
+
+        # Core services (always available)
         self.db = DatabaseService()
-        self.llm = LLMService()
-        self.rag = RAGService()
-        self.pdf = PDFService()
+        self.phonetic_search = MultiStrategySearch(self.db)
+        self.safety_checker = PrescriptionSafetyChecker()
+        self.context_builder = ContextBuilder(self.db)
+
+        # Optional services
+        self.pdf = None
+        if PDFService:
+            try:
+                self.pdf = PDFService()
+            except Exception as e:
+                print(f"PDF service unavailable: {e}")
+
+        # Optional AI services (mode-dependent)
+        self.llm = None
+        self.rag = None
+
+        if self.capabilities.llm_prescription and LLMService:
+            try:
+                self.llm = LLMService()
+            except Exception as e:
+                print(f"LLM service unavailable: {e}")
+
+        if self.capabilities.vector_rag and RAGService:
+            try:
+                self.rag = RAGService()
+            except Exception as e:
+                print(f"RAG service unavailable: {e}")
 
         self.current_patient: Optional[Patient] = None
+        self.current_snapshot: Optional[PatientSnapshot] = None
         self.page: Optional[ft.Page] = None
 
         # UI components (initialized in build)
@@ -32,6 +86,7 @@ class DocAssistApp:
         self.central_panel: Optional[CentralPanel] = None
         self.agent_panel: Optional[AgentPanel] = None
         self.status_bar: Optional[ft.Text] = None
+        self.mode_badge: Optional[ft.Container] = None
 
     def main(self, page: ft.Page):
         """Main entry point for Flet app."""
@@ -66,20 +121,24 @@ class DocAssistApp:
             on_search=self._on_patient_search,
             on_new_patient=self._on_new_patient,
             db=self.db,
-            rag=self.rag
+            phonetic_search=self.phonetic_search,
         )
 
         self.central_panel = CentralPanel(
             on_generate_rx=self._on_generate_prescription,
             on_save_visit=self._on_save_visit,
             on_print_pdf=self._on_print_pdf,
-            llm=self.llm
+            llm=self.llm,
+            safety_checker=self.safety_checker,
+            capabilities=self.capabilities,
         )
 
         self.agent_panel = AgentPanel(
             on_query=self._on_rag_query,
             llm=self.llm,
-            rag=self.rag
+            rag=self.rag,
+            context_builder=self.context_builder,
+            capabilities=self.capabilities,
         )
 
         # Status bar
@@ -89,6 +148,30 @@ class DocAssistApp:
             color=ft.Colors.GREY_600
         )
 
+        # Mode badge
+        mode_colors = {
+            AppMode.LITE: (ft.Colors.GREY_700, "LITE"),
+            AppMode.STANDARD: (ft.Colors.BLUE_700, "STD"),
+            AppMode.FULL: (ft.Colors.GREEN_700, "FULL"),
+        }
+        mode_color, mode_text = mode_colors.get(
+            self.mode_manager.mode,
+            (ft.Colors.GREY_700, "???")
+        )
+
+        self.mode_badge = ft.Container(
+            content=ft.Text(
+                mode_text,
+                size=10,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.WHITE,
+            ),
+            bgcolor=mode_color,
+            padding=ft.padding.symmetric(horizontal=8, vertical=2),
+            border_radius=10,
+            tooltip=self.mode_manager._get_mode_display_name(),
+        )
+
         # Header
         header = ft.Container(
             content=ft.Row(
@@ -96,6 +179,7 @@ class DocAssistApp:
                     ft.Row([
                         ft.Icon(ft.Icons.LOCAL_HOSPITAL, color=ft.Colors.BLUE_700, size=28),
                         ft.Text("DocAssist EMR", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
+                        self.mode_badge,
                     ], spacing=10),
                     ft.Row([
                         self.status_bar,
@@ -155,11 +239,15 @@ class DocAssistApp:
     def _check_llm_status(self):
         """Check LLM availability in background."""
         def check():
-            if self.llm.is_available():
+            if self.llm and self.llm.is_available():
                 model_info = self.llm.get_model_info()
-                self._update_status(f"LLM: {model_info['model']} | RAM: {model_info['ram_gb']:.1f}GB")
-            else:
+                self._update_status(
+                    f"LLM: {model_info['model']} | RAM: {model_info['ram_available_gb']:.1f}GB"
+                )
+            elif self.capabilities.llm_prescription:
                 self._update_status("Ollama not running - AI features disabled", error=True)
+            else:
+                self._update_status(f"Mode: {self.mode_manager.mode.value} (AI disabled)")
 
         threading.Thread(target=check, daemon=True).start()
 
@@ -179,30 +267,43 @@ class DocAssistApp:
     def _on_patient_selected(self, patient: Patient):
         """Handle patient selection."""
         self.current_patient = patient
-        self.central_panel.set_patient(patient)
+
+        # Get or compute patient snapshot
+        self.current_snapshot = self.db.get_patient_snapshot(patient.id)
+        if not self.current_snapshot:
+            self.current_snapshot = self.db.compute_patient_snapshot(patient.id)
+
+        self.central_panel.set_patient(patient, self.current_snapshot)
         self.agent_panel.set_patient(patient)
 
         # Load visits for this patient
         visits = self.db.get_patient_visits(patient.id)
         self.central_panel.set_visits(visits)
 
-        # Index patient documents for RAG in background
-        self._index_patient_for_rag(patient.id)
+        # Index patient documents for RAG in background (if available)
+        if self.rag:
+            self._index_patient_for_rag(patient.id)
 
         self._update_status(f"Selected: {patient.name} ({patient.uhid})")
 
     def _index_patient_for_rag(self, patient_id: int):
         """Index patient documents for RAG in background."""
-        def index():
-            # Get patient summary
-            summary = self.db.get_patient_summary(patient_id)
-            if summary:
-                self.rag.index_patient_summary(patient_id, summary)
+        if not self.rag:
+            return
 
-            # Get all documents
-            documents = self.db.get_patient_documents_for_rag(patient_id)
-            if documents:
-                self.rag.index_patient_documents(patient_id, documents)
+        def index():
+            try:
+                # Get patient summary
+                summary = self.db.get_patient_summary(patient_id)
+                if summary:
+                    self.rag.index_patient_summary(patient_id, summary)
+
+                # Get all documents
+                documents = self.db.get_patient_documents_for_rag(patient_id)
+                if documents:
+                    self.rag.index_patient_documents(patient_id, documents)
+            except Exception as e:
+                print(f"RAG indexing error: {e}")
 
         threading.Thread(target=index, daemon=True).start()
 
@@ -212,15 +313,33 @@ class DocAssistApp:
             self._load_patients()
             return
 
-        # First try basic search
-        patients = self.db.search_patients_basic(query)
+        # Try FTS search first
+        patients = self.db.fts_search_patients(query, limit=20)
 
-        # If no results and query looks like natural language, try RAG search
-        if not patients and len(query.split()) > 2:
-            results = self.rag.search_patients(query, n_results=10)
-            if results:
-                patient_ids = [r[0] for r in results]
-                patients = [self.db.get_patient(pid) for pid in patient_ids if self.db.get_patient(pid)]
+        # Try phonetic search if FTS found nothing
+        if not patients:
+            all_patients = self.db.get_all_patients()
+            results = self.phonetic_search.search(
+                query,
+                [(p.name, p) for p in all_patients],
+                threshold=0.6,
+                limit=20
+            )
+            patients = [p for _, _, p in results]
+
+        # If still no results and RAG is available, try semantic search
+        if not patients and self.rag and len(query.split()) > 2:
+            try:
+                results = self.rag.search_patients(query, n_results=10)
+                if results:
+                    patient_ids = [r[0] for r in results]
+                    patients = [
+                        self.db.get_patient(pid)
+                        for pid in patient_ids
+                        if self.db.get_patient(pid)
+                    ]
+            except Exception:
+                pass
 
         self.patient_panel.set_patients(patients)
 
@@ -229,30 +348,56 @@ class DocAssistApp:
         patient = Patient(**patient_data)
         saved_patient = self.db.add_patient(patient)
 
-        # Index for RAG
-        summary = f"Patient: {saved_patient.name}. UHID: {saved_patient.uhid}"
-        if saved_patient.age:
-            summary += f". Age: {saved_patient.age}"
-        if saved_patient.gender:
-            summary += f". Gender: {saved_patient.gender}"
-        self.rag.index_patient_summary(saved_patient.id, summary)
+        # Index for RAG if available
+        if self.rag:
+            summary = f"Patient: {saved_patient.name}. UHID: {saved_patient.uhid}"
+            if saved_patient.age:
+                summary += f". Age: {saved_patient.age}"
+            if saved_patient.gender:
+                summary += f". Gender: {saved_patient.gender}"
+            try:
+                self.rag.index_patient_summary(saved_patient.id, summary)
+            except Exception:
+                pass
 
         self._load_patients()
         self._on_patient_selected(saved_patient)
         self._update_status(f"Created patient: {saved_patient.name}")
 
-    def _on_generate_prescription(self, clinical_notes: str, callback):
+    def _on_generate_prescription(
+        self,
+        clinical_notes: str,
+        callback,
+        patient_snapshot: Optional[PatientSnapshot] = None
+    ):
         """Handle prescription generation."""
+        if not self.llm:
+            callback(False, None, [], "LLM not available in current mode.")
+            return
+
         if not self.llm.is_available():
-            callback(False, None, "Ollama is not running. Please start Ollama first.")
+            callback(False, None, [], "Ollama is not running. Please start Ollama first.")
             return
 
         self._update_status("Generating prescription...")
 
+        # Use current snapshot if not provided
+        snapshot = patient_snapshot or self.current_snapshot
+
         def generate():
             success, prescription, raw = self.llm.generate_prescription(clinical_notes)
+
+            # Run safety checks if prescription generated successfully
+            safety_alerts: List[SafetyAlert] = []
+            if success and prescription and snapshot:
+                safety_alerts = self.safety_checker.validate_prescription(
+                    prescription, snapshot
+                )
+
             if self.page:
-                self.page.run_thread_safe(lambda: callback(success, prescription, raw))
+                self.page.run_thread_safe(
+                    lambda: callback(success, prescription, safety_alerts, raw)
+                )
                 self.page.run_thread_safe(lambda: self._update_status(
                     "Prescription generated" if success else f"Error: {raw[:50]}"
                 ))
@@ -271,7 +416,11 @@ class DocAssistApp:
         saved_visit = self.db.add_visit(visit)
 
         # Reindex patient for RAG
-        self._index_patient_for_rag(self.current_patient.id)
+        if self.rag:
+            self._index_patient_for_rag(self.current_patient.id)
+
+        # Update patient snapshot
+        self.current_snapshot = self.db.compute_patient_snapshot(self.current_patient.id)
 
         self._update_status(f"Visit saved for {self.current_patient.name}")
         return True
@@ -279,6 +428,10 @@ class DocAssistApp:
     def _on_print_pdf(self, prescription: Prescription, chief_complaint: str) -> Optional[str]:
         """Handle PDF generation."""
         if not self.current_patient or not prescription:
+            return None
+
+        if not self.pdf:
+            self._update_status("PDF generation not available", error=True)
             return None
 
         filepath = self.pdf.generate_prescription_pdf(
@@ -300,22 +453,34 @@ class DocAssistApp:
             callback(False, "Please select a patient first.")
             return
 
-        if not self.llm.is_available():
-            callback(False, "Ollama is not running. Please start Ollama first.")
-            return
-
         self._update_status("Searching patient records...")
 
         def query():
-            # Get relevant context
-            context = self.rag.query_patient_context(
-                patient_id=self.current_patient.id,
-                query=question,
-                n_results=5
+            # Try SQL-based context builder first (always available)
+            context = self.context_builder.build_context(
+                self.current_patient.id, question
             )
 
-            # Generate answer
-            success, answer = self.llm.query_patient_records(context, question)
+            # If we have vector RAG and the query needs semantic search, use it
+            if self.rag and self.capabilities.semantic_search:
+                try:
+                    rag_context = self.rag.query_patient_context(
+                        patient_id=self.current_patient.id,
+                        query=question,
+                        n_results=5
+                    )
+                    if rag_context:
+                        context += "\n\n--- Vector Search Results ---\n" + rag_context
+                except Exception as e:
+                    print(f"RAG query error: {e}")
+
+            # Generate answer with LLM if available
+            if self.llm and self.llm.is_available():
+                success, answer = self.llm.query_patient_records(context, question)
+            else:
+                # Return raw context without LLM interpretation
+                success = True
+                answer = f"[AI disabled - Raw data]\n\n{context}"
 
             if self.page:
                 self.page.run_thread_safe(lambda: callback(success, answer))
@@ -325,18 +490,46 @@ class DocAssistApp:
 
     def _on_settings_click(self, e):
         """Handle settings click."""
-        model_info = self.llm.get_model_info()
+        mode_status = self.mode_manager.get_status()
+
+        content_items = [
+            ft.Text(f"Mode: {mode_status['mode_display']}", size=14, weight=ft.FontWeight.BOLD),
+            ft.Divider(),
+            ft.Text(f"RAM: {mode_status['ram_available_gb']} / {mode_status['ram_total_gb']} GB", size=13),
+        ]
+
+        # Add feature status
+        content_items.append(ft.Text("Features:", size=13, weight=ft.FontWeight.W_500))
+        for feature, enabled in mode_status['features'].items():
+            icon = ft.Icons.CHECK_CIRCLE if enabled else ft.Icons.CANCEL
+            color = ft.Colors.GREEN_600 if enabled else ft.Colors.GREY_400
+            content_items.append(
+                ft.Row([
+                    ft.Icon(icon, size=16, color=color),
+                    ft.Text(feature, size=12),
+                ], spacing=5)
+            )
+
+        # Add LLM info if available
+        if self.llm:
+            content_items.append(ft.Divider())
+            model_info = self.llm.get_model_info()
+            content_items.append(ft.Text(f"LLM Model: {model_info['model']}", size=13))
+            content_items.append(ft.Text(
+                f"Ollama: {'Connected' if model_info['ollama_available'] else 'Not Running'}",
+                size=13,
+                color=ft.Colors.GREEN_600 if model_info['ollama_available'] else ft.Colors.RED_600
+            ))
+
+        # Add upgrade message if applicable
+        upgrade_msg = self.mode_manager.get_upgrade_message()
+        if upgrade_msg:
+            content_items.append(ft.Divider())
+            content_items.append(ft.Text(upgrade_msg, size=11, italic=True))
 
         dialog = ft.AlertDialog(
-            title=ft.Text("Settings"),
-            content=ft.Column([
-                ft.Text(f"Model: {model_info['model']}", size=14),
-                ft.Text(f"System RAM: {model_info['ram_gb']:.1f} GB", size=14),
-                ft.Text(f"Ollama Status: {'Connected' if model_info['ollama_available'] else 'Not Running'}", size=14),
-                ft.Divider(),
-                ft.Text("To change models or configure Ollama,", size=12),
-                ft.Text("edit the model selection in src/services/llm.py", size=12),
-            ], tight=True, spacing=10),
+            title=ft.Text("Settings & Status"),
+            content=ft.Column(content_items, tight=True, spacing=8, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Close", on_click=lambda e: self._close_dialog(dialog)),
             ],
@@ -362,8 +555,12 @@ class DocAssistApp:
                 ft.Text("Example: 'What was his last creatinine?'", size=12),
                 ft.Divider(),
                 ft.Text("Search:", weight=ft.FontWeight.BOLD),
-                ft.Text("Search patients by name or natural language", size=12),
-                ft.Text("Example: 'Ram who had PCI to LAD'", size=12),
+                ft.Text("Search patients by name (phonetic matching)", size=12),
+                ft.Text("Example: 'Ram' matches 'Raam', 'Rama'", size=12),
+                ft.Divider(),
+                ft.Text("Safety Alerts:", weight=ft.FontWeight.BOLD),
+                ft.Text("Prescriptions are checked for allergies,", size=12),
+                ft.Text("drug interactions, and dose limits.", size=12),
             ], tight=True, spacing=5, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Close", on_click=lambda e: self._close_dialog(dialog)),

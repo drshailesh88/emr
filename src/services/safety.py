@@ -639,3 +639,28 @@ class CriticalInfoBanner:
             "on_anticoagulation": patient_snapshot.on_anticoagulation,
             "anticoag_drug": patient_snapshot.anticoag_drug,
         }
+
+    @staticmethod
+    def get_critical_info(patient_snapshot: PatientSnapshot) -> Optional[Dict[str, Any]]:
+        """
+        Static method to get critical info for display.
+
+        Args:
+            patient_snapshot: Patient's clinical snapshot
+
+        Returns:
+            Dictionary with critical info, or None if no critical info
+        """
+        if not patient_snapshot:
+            return None
+
+        info = {
+            "allergies": patient_snapshot.allergies or [],
+            "on_anticoagulation": patient_snapshot.on_anticoagulation,
+            "active_problems": patient_snapshot.active_problems or [],
+        }
+
+        # Only return if there's something to show
+        if info["allergies"] or info["on_anticoagulation"] or info["active_problems"]:
+            return info
+        return None
