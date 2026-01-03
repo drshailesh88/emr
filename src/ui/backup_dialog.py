@@ -17,6 +17,8 @@ class BackupDialog:
         self,
         page: ft.Page,
         backup_service: BackupService,
+        scheduler=None,
+        settings_service=None,
         on_close: Optional[Callable] = None
     ):
         """Initialize backup dialog.
@@ -24,10 +26,14 @@ class BackupDialog:
         Args:
             page: Flet page
             backup_service: Backup service instance
+            scheduler: BackupScheduler instance (optional)
+            settings_service: SettingsService instance (optional)
             on_close: Callback when dialog closes
         """
         self.page = page
         self.backup_service = backup_service
+        self.scheduler = scheduler
+        self.settings_service = settings_service
         self.on_close = on_close
 
         # UI state
@@ -36,6 +42,13 @@ class BackupDialog:
         self.progress_text: Optional[ft.Text] = None
         self.backup_list: Optional[ft.ListView] = None
         self.password_field: Optional[ft.TextField] = None
+
+        # Auto-backup controls
+        self.auto_backup_enabled: Optional[ft.Switch] = None
+        self.frequency_dropdown: Optional[ft.Dropdown] = None
+        self.backup_on_close_switch: Optional[ft.Switch] = None
+        self.cloud_sync_switch: Optional[ft.Switch] = None
+        self.scheduler_status_text: Optional[ft.Text] = None
 
         # Build and show dialog
         self._build_dialog()
@@ -83,43 +96,129 @@ class BackupDialog:
             disabled=not crypto_available,
         )
 
+        # Auto-backup controls (if scheduler is available)
+        auto_backup_section = None
+        if self.scheduler and self.settings_service:
+            backup_settings = self.settings_service.get_backup_settings()
+            scheduler_status = self.scheduler.get_status()
+
+            self.auto_backup_enabled = ft.Switch(
+                label="Enable auto-backup",
+                value=backup_settings.auto_backup_enabled,
+                on_change=self._on_auto_backup_toggle,
+            )
+
+            self.frequency_dropdown = ft.Dropdown(
+                label="Backup frequency",
+                width=150,
+                options=[
+                    ft.dropdown.Option("1", "Every hour"),
+                    ft.dropdown.Option("4", "Every 4 hours"),
+                    ft.dropdown.Option("12", "Every 12 hours"),
+                    ft.dropdown.Option("24", "Every 24 hours"),
+                ],
+                value=str(backup_settings.backup_frequency_hours),
+                on_change=self._on_frequency_change,
+            )
+
+            self.backup_on_close_switch = ft.Switch(
+                label="Backup on app close",
+                value=backup_settings.backup_on_close,
+                on_change=self._on_backup_on_close_toggle,
+            )
+
+            self.cloud_sync_switch = ft.Switch(
+                label="Auto-sync to cloud",
+                value=backup_settings.cloud_sync_enabled,
+                on_change=self._on_cloud_sync_toggle,
+            )
+
+            # Status text
+            last_backup_text = "Never"
+            next_backup_text = "N/A"
+            if scheduler_status.get('last_backup_hours_ago') is not None:
+                hours_ago = scheduler_status['last_backup_hours_ago']
+                if hours_ago < 1:
+                    last_backup_text = f"{int(hours_ago * 60)} minutes ago"
+                else:
+                    last_backup_text = f"{hours_ago:.1f} hours ago"
+
+            if scheduler_status.get('next_backup_in_minutes') is not None:
+                minutes = scheduler_status['next_backup_in_minutes']
+                if minutes < 60:
+                    next_backup_text = f"in {minutes} minutes"
+                else:
+                    next_backup_text = f"in {minutes // 60} hours"
+
+            self.scheduler_status_text = ft.Text(
+                f"Last backup: {last_backup_text} | Next backup: {next_backup_text}",
+                size=11,
+                color=ft.Colors.GREY_600,
+            )
+
+            auto_backup_section = ft.Container(
+                content=ft.Column([
+                    ft.Text("Auto-Backup", size=14, weight=ft.FontWeight.W_500),
+                    self.auto_backup_enabled,
+                    ft.Row([
+                        self.frequency_dropdown,
+                        self.backup_on_close_switch,
+                    ], spacing=20),
+                    self.cloud_sync_switch,
+                    self.scheduler_status_text,
+                ], spacing=8),
+                bgcolor=ft.Colors.BLUE_50,
+                padding=10,
+                border_radius=8,
+            )
+
         # Local backup tab
-        local_tab = ft.Container(
-            content=ft.Column([
-                ft.Text("Local Backups", size=16, weight=ft.FontWeight.BOLD),
-                ft.Text(
-                    f"Encryption: {crypto_backend}" if crypto_available else "Encryption: Not available (install pynacl)",
-                    size=11,
-                    color=ft.Colors.GREY_600,
+        local_tab_controls = [
+            ft.Text("Local Backups", size=16, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                f"Encryption: {crypto_backend}" if crypto_available else "Encryption: Not available (install pynacl)",
+                size=11,
+                color=ft.Colors.GREY_600,
+            ),
+            ft.Divider(),
+        ]
+
+        # Add auto-backup section if available
+        if auto_backup_section:
+            local_tab_controls.append(auto_backup_section)
+            local_tab_controls.append(ft.Divider())
+
+        # Add manual backup controls
+        local_tab_controls.extend([
+            ft.Text("Manual Backup", size=14, weight=ft.FontWeight.W_500),
+            ft.Row([
+                self.encrypt_checkbox,
+                self.password_field,
+            ], spacing=20),
+
+            ft.Row([
+                ft.ElevatedButton(
+                    "Create Backup",
+                    icon=ft.Icons.BACKUP,
+                    on_click=self._on_create_backup,
                 ),
-                ft.Divider(),
+                ft.OutlinedButton(
+                    "Refresh List",
+                    icon=ft.Icons.REFRESH,
+                    on_click=lambda e: self._refresh_backup_list(),
+                ),
+            ], spacing=10),
 
-                # Backup controls
-                ft.Row([
-                    self.encrypt_checkbox,
-                    self.password_field,
-                ], spacing=20),
+            self.progress_bar,
+            self.progress_text,
 
-                ft.Row([
-                    ft.ElevatedButton(
-                        "Create Backup",
-                        icon=ft.Icons.BACKUP,
-                        on_click=self._on_create_backup,
-                    ),
-                    ft.OutlinedButton(
-                        "Refresh List",
-                        icon=ft.Icons.REFRESH,
-                        on_click=lambda e: self._refresh_backup_list(),
-                    ),
-                ], spacing=10),
+            ft.Divider(),
+            ft.Text("Available Backups:", weight=ft.FontWeight.W_500),
+            self.backup_list,
+        ])
 
-                self.progress_bar,
-                self.progress_text,
-
-                ft.Divider(),
-                ft.Text("Available Backups:", weight=ft.FontWeight.W_500),
-                self.backup_list,
-            ], spacing=10, scroll=ft.ScrollMode.AUTO),
+        local_tab = ft.Container(
+            content=ft.Column(local_tab_controls, spacing=10, scroll=ft.ScrollMode.AUTO),
             padding=15,
         )
 
@@ -709,12 +808,108 @@ class BackupDialog:
         if self.on_close:
             self.on_close()
 
+    def _on_auto_backup_toggle(self, e):
+        """Handle auto-backup toggle."""
+        if not self.settings_service or not self.scheduler:
+            return
 
-def show_backup_dialog(page: ft.Page, backup_service: BackupService):
+        enabled = self.auto_backup_enabled.value
+        self.settings_service.enable_auto_backup(enabled)
+
+        if enabled:
+            self.scheduler.start()
+            self._show_snackbar("Auto-backup enabled")
+        else:
+            self.scheduler.stop()
+            self._show_snackbar("Auto-backup disabled")
+
+        self._update_scheduler_status()
+
+    def _on_frequency_change(self, e):
+        """Handle backup frequency change."""
+        if not self.settings_service or not self.scheduler:
+            return
+
+        hours = int(self.frequency_dropdown.value)
+        self.settings_service.set_backup_frequency(hours)
+        self.scheduler.set_frequency(hours)
+        self._show_snackbar(f"Backup frequency set to {hours} hours")
+        self._update_scheduler_status()
+
+    def _on_backup_on_close_toggle(self, e):
+        """Handle backup on close toggle."""
+        if not self.settings_service:
+            return
+
+        enabled = self.backup_on_close_switch.value
+        self.settings_service.enable_backup_on_close(enabled)
+        self._show_snackbar(f"Backup on close {'enabled' if enabled else 'disabled'}")
+
+    def _on_cloud_sync_toggle(self, e):
+        """Handle cloud sync toggle."""
+        if not self.settings_service or not self.scheduler:
+            return
+
+        enabled = self.cloud_sync_switch.value
+
+        if enabled:
+            # Need password and cloud config
+            password = self.password_field.value
+            if not password:
+                self._show_snackbar("Please enter a backup password first", error=True)
+                self.cloud_sync_switch.value = False
+                self.page.update()
+                return
+
+            # Get cloud config from settings
+            backup_settings = self.settings_service.get_backup_settings()
+            if not backup_settings.cloud_config:
+                self._show_snackbar("Please configure cloud storage first", error=True)
+                self.cloud_sync_switch.value = False
+                self.page.update()
+                return
+
+            self.scheduler.enable_cloud_sync(enabled, password, backup_settings.cloud_config)
+            self._show_snackbar("Auto-sync to cloud enabled")
+        else:
+            self.scheduler.enable_cloud_sync(False)
+            self._show_snackbar("Auto-sync to cloud disabled")
+
+    def _update_scheduler_status(self):
+        """Update scheduler status text."""
+        if not self.scheduler or not self.scheduler_status_text:
+            return
+
+        scheduler_status = self.scheduler.get_status()
+
+        last_backup_text = "Never"
+        next_backup_text = "N/A"
+
+        if scheduler_status.get('last_backup_hours_ago') is not None:
+            hours_ago = scheduler_status['last_backup_hours_ago']
+            if hours_ago < 1:
+                last_backup_text = f"{int(hours_ago * 60)} minutes ago"
+            else:
+                last_backup_text = f"{hours_ago:.1f} hours ago"
+
+        if scheduler_status.get('next_backup_in_minutes') is not None:
+            minutes = scheduler_status['next_backup_in_minutes']
+            if minutes < 60:
+                next_backup_text = f"in {minutes} minutes"
+            else:
+                next_backup_text = f"in {minutes // 60} hours"
+
+        self.scheduler_status_text.value = f"Last backup: {last_backup_text} | Next backup: {next_backup_text}"
+        self.page.update()
+
+
+def show_backup_dialog(page: ft.Page, backup_service: BackupService, scheduler=None, settings_service=None):
     """Show the backup dialog.
 
     Args:
         page: Flet page
         backup_service: Backup service instance
+        scheduler: BackupScheduler instance (optional)
+        settings_service: SettingsService instance (optional)
     """
-    BackupDialog(page, backup_service)
+    BackupDialog(page, backup_service, scheduler, settings_service)

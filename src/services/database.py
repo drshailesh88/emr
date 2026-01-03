@@ -99,6 +99,15 @@ class DatabaseService:
                 )
             """)
 
+            # Metadata table for change tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
             # Create indexes for faster search
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(name)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id)")
@@ -128,7 +137,8 @@ class DatabaseService:
                   patient.phone, patient.address))
             patient.id = cursor.lastrowid
             patient.uhid = uhid
-            return patient
+        self.mark_data_changed()
+        return patient
 
     def get_patient(self, patient_id: int) -> Optional[Patient]:
         """Get patient by ID."""
@@ -169,7 +179,10 @@ class DatabaseService:
                 WHERE id = ?
             """, (patient.name, patient.age, patient.gender,
                   patient.phone, patient.address, patient.id))
-            return cursor.rowcount > 0
+            updated = cursor.rowcount > 0
+        if updated:
+            self.mark_data_changed()
+        return updated
 
     # ============== VISIT OPERATIONS ==============
 
@@ -185,7 +198,8 @@ class DatabaseService:
             """, (visit.patient_id, visit_date, visit.chief_complaint,
                   visit.clinical_notes, visit.diagnosis, visit.prescription_json))
             visit.id = cursor.lastrowid
-            return visit
+        self.mark_data_changed()
+        return visit
 
     def get_patient_visits(self, patient_id: int) -> List[Visit]:
         """Get all visits for a patient."""
@@ -208,7 +222,10 @@ class DatabaseService:
                 WHERE id = ?
             """, (visit.chief_complaint, visit.clinical_notes,
                   visit.diagnosis, visit.prescription_json, visit.id))
-            return cursor.rowcount > 0
+            updated = cursor.rowcount > 0
+        if updated:
+            self.mark_data_changed()
+        return updated
 
     # ============== INVESTIGATION OPERATIONS ==============
 
@@ -226,7 +243,8 @@ class DatabaseService:
                   investigation.reference_range, test_date,
                   investigation.is_abnormal))
             investigation.id = cursor.lastrowid
-            return investigation
+        self.mark_data_changed()
+        return investigation
 
     def get_patient_investigations(self, patient_id: int) -> List[Investigation]:
         """Get all investigations for a patient."""
@@ -252,7 +270,8 @@ class DatabaseService:
             """, (procedure.patient_id, procedure.procedure_name,
                   procedure.details, procedure_date, procedure.notes))
             procedure.id = cursor.lastrowid
-            return procedure
+        self.mark_data_changed()
+        return procedure
 
     def get_patient_procedures(self, patient_id: int) -> List[Procedure]:
         """Get all procedures for a patient."""
@@ -366,3 +385,51 @@ class DatabaseService:
             documents.append((doc_id, content, metadata))
 
         return documents
+
+    # ============== CHANGE TRACKING ==============
+
+    def mark_data_changed(self):
+        """Mark that data has been modified.
+
+        This updates the 'last_modified' timestamp in the metadata table,
+        which is used by the backup scheduler to determine if a backup is needed.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO metadata (key, value, updated_at)
+                VALUES ('last_modified', ?, CURRENT_TIMESTAMP)
+            """, (datetime.now().isoformat(),))
+
+    def has_changes_since(self, timestamp: datetime) -> bool:
+        """Check if there are changes since the given timestamp.
+
+        Args:
+            timestamp: Reference timestamp to check against
+
+        Returns:
+            True if data has been modified since timestamp, False otherwise
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check metadata table for last modification
+            cursor.execute("""
+                SELECT value, updated_at FROM metadata WHERE key = 'last_modified'
+            """)
+            row = cursor.fetchone()
+
+            if not row:
+                # No modification tracking yet, check if any data exists
+                cursor.execute("SELECT COUNT(*) FROM patients")
+                patient_count = cursor.fetchone()[0]
+                return patient_count > 0
+
+            # Parse the timestamp from metadata
+            try:
+                last_modified_str = row[0]
+                last_modified = datetime.fromisoformat(last_modified_str)
+                return last_modified > timestamp
+            except (ValueError, TypeError):
+                # If we can't parse the timestamp, assume there are changes
+                return True

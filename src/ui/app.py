@@ -9,6 +9,8 @@ from ..services.llm import LLMService
 from ..services.rag import RAGService
 from ..services.pdf import PDFService
 from ..services.backup import BackupService
+from ..services.settings import SettingsService
+from ..services.scheduler import BackupScheduler
 from ..models.schemas import Patient, Visit, Prescription
 
 from .patient_panel import PatientPanel
@@ -26,6 +28,15 @@ class DocAssistApp:
         self.rag = RAGService()
         self.pdf = PDFService()
         self.backup = BackupService()
+        self.settings = SettingsService()
+
+        # Initialize backup scheduler
+        backup_settings_dict = self.settings.get_backup_settings().to_dict()
+        self.scheduler = BackupScheduler(
+            backup_service=self.backup,
+            settings_dict=backup_settings_dict,
+            database_service=self.db
+        )
 
         self.current_patient: Optional[Patient] = None
         self.page: Optional[ft.Page] = None
@@ -50,6 +61,9 @@ class DocAssistApp:
         page.window.min_width = 1000
         page.window.min_height = 600
 
+        # Set close handler
+        page.on_close = self._on_app_close
+
         # Check LLM status in background
         self._check_llm_status()
 
@@ -59,6 +73,10 @@ class DocAssistApp:
 
         # Load patients
         self._load_patients()
+
+        # Start backup scheduler
+        if self.scheduler:
+            self.scheduler.start()
 
     def _build_ui(self) -> ft.Control:
         """Build the main UI layout."""
@@ -333,7 +351,7 @@ class DocAssistApp:
 
     def _on_backup_click(self, e):
         """Handle backup button click."""
-        show_backup_dialog(self.page, self.backup)
+        show_backup_dialog(self.page, self.backup, self.scheduler, self.settings)
 
     def _on_settings_click(self, e):
         """Handle settings click."""
@@ -389,6 +407,14 @@ class DocAssistApp:
         """Close a dialog."""
         dialog.open = False
         self.page.update()
+
+    def _on_app_close(self, e):
+        """Handle app close event."""
+        if self.scheduler:
+            # Perform backup on close if enabled
+            self.scheduler.backup_on_close()
+            # Stop the scheduler
+            self.scheduler.stop()
 
 
 def run_app():
