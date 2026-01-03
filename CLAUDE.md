@@ -142,7 +142,77 @@ docassist/
 2. **Validation**: Always validate LLM JSON output with Pydantic
 3. **Draft Mode**: LLM output shown as draft, doctor must confirm
 4. **Error Handling**: Graceful degradation if Ollama not running
-5. **Privacy**: No network calls except to localhost:11434 (Ollama)
+5. **Privacy**: No network calls except to localhost:11434 (Ollama) and optional encrypted backup service
+
+## Development Toolkit (MANDATORY)
+
+**IMPORTANT**: Always use these tools for complex development tasks. Re-read this section when context resets.
+
+### Spec-Kit (Specification-Driven Development)
+- **Source**: https://github.com/github/spec-kit
+- **Install**: `uvx specify` or `uv tool install specify`
+- **Commands**:
+  - `/speckit.constitution` — Establish project governance
+  - `/speckit.specify` — Define requirements and user stories
+  - `/speckit.plan` — Create technical implementation strategies
+  - `/speckit.tasks` — Generate actionable task lists
+  - `/speckit.implement` — Execute the complete build
+- **When to use**: New features, major refactors, unclear requirements
+
+### Ralph Wiggum (Iterative Loop Development)
+- **Source**: https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum
+- **Purpose**: Enables iterative, self-improving development loops
+- **Commands**:
+  - `/ralph-loop "<prompt>" --max-iterations <n> --completion-promise "<text>"`
+  - `/cancel-ralph` — Stop an active loop
+- **When to use**: TDD cycles, bug fixing loops, iterative refinement
+- **Best for**: Tasks with clear completion criteria (tests pass, linter clean)
+
+## Cloud Backup Strategy (E2E Encrypted)
+
+### Architecture (WhatsApp-style Zero-Knowledge)
+```
+Doctor's Device                    DocAssist Cloud
+┌─────────────────┐               ┌─────────────────┐
+│ SQLite + Chroma │               │ Encrypted Blobs │
+│   (plaintext)   │               │ (cannot decrypt)│
+└────────┬────────┘               └────────▲────────┘
+         │                                 │
+         ▼                                 │
+┌─────────────────┐     AES-256-GCM       │
+│ Client-Side     │────────────────────────┘
+│ Encryption      │
+│ (PyNaCl/Tink)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  Key Protection Options                 │
+│  A) 64-digit key (user writes down)     │
+│  B) Password + Argon2 KDF               │
+│  C) Password + HSM vault (premium)      │
+└─────────────────────────────────────────┘
+```
+
+### Implementation Modules
+- `src/services/backup.py` — Backup creation, encryption, chunking
+- `src/services/crypto.py` — PyNaCl encryption, Argon2 key derivation
+- `src/services/sync.py` — Cloud upload/download, conflict resolution
+
+### Key Principles
+1. **Zero-knowledge**: Server stores only encrypted blobs
+2. **Client-side encryption**: All encryption happens on device
+3. **Key never leaves device**: Password derives key locally via Argon2
+4. **Optional feature**: Core app works fully offline without backup
+5. **BYOS support**: Doctors can use their own S3/Backblaze/Google Drive
+
+### Pricing Tiers (Future)
+| Tier   | Storage | Price    | Features                    |
+|--------|---------|----------|-----------------------------|
+| Free   | 1 GB    | ₹0       | Manual backup, BYOS         |
+| Basic  | 10 GB   | ₹99/mo   | Auto-backup, 30-day history |
+| Pro    | 50 GB   | ₹299/mo  | + Multi-device sync         |
+| Clinic | 200 GB  | ₹999/mo  | + 5 users, audit log        |
 
 ## Prescription JSON Schema
 ```json
