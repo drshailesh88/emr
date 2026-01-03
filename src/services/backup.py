@@ -315,53 +315,57 @@ class BackupService:
             List of BackupInfo objects
         """
         backups = []
+        seen_files = set()
 
         if not self.backup_dir.exists():
             return backups
 
-        # Find all backup zip files
-        for pattern in ["backup_*.zip", "backup_*.encrypted.zip"]:
-            for backup_file in sorted(self.backup_dir.glob(pattern), reverse=True):
-                is_encrypted = ".encrypted" in backup_file.name
+        # Find all backup zip files (use set to avoid duplicates)
+        for backup_file in sorted(self.backup_dir.glob("backup_*.zip"), reverse=True):
+            if backup_file in seen_files:
+                continue
+            seen_files.add(backup_file)
 
-                backup_info = BackupInfo(
-                    path=backup_file,
-                    filename=backup_file.name,
-                    created_at="",
-                    size_bytes=backup_file.stat().st_size,
-                    patient_count=0,
-                    visit_count=0,
-                    is_encrypted=is_encrypted
-                )
+            is_encrypted = ".encrypted" in backup_file.name
 
-                # Try to read manifest from zip (only for unencrypted)
-                if not is_encrypted:
-                    try:
-                        with zipfile.ZipFile(backup_file, 'r') as zipf:
-                            if 'backup_manifest.json' in zipf.namelist():
-                                manifest_data = zipf.read('backup_manifest.json')
-                                manifest = json.loads(manifest_data)
-                                backup_info.created_at = manifest.get("created_at", "")
-                                backup_info.patient_count = manifest.get("patient_count", 0)
-                                backup_info.visit_count = manifest.get("visit_count", 0)
-                    except Exception as e:
-                        print(f"Error reading manifest from {backup_file}: {e}")
+            backup_info = BackupInfo(
+                path=backup_file,
+                filename=backup_file.name,
+                created_at="",
+                size_bytes=backup_file.stat().st_size,
+                patient_count=0,
+                visit_count=0,
+                is_encrypted=is_encrypted
+            )
 
-                # Fallback: extract timestamp from filename
-                if not backup_info.created_at:
-                    try:
-                        # backup_2026-01-02_10-30-00.zip -> 2026-01-02 10:30:00
-                        name = backup_file.stem.replace(".encrypted", "")
-                        timestamp_str = name.replace("backup_", "").replace("_", " ", 1).replace("-", ":")
-                        backup_info.created_at = datetime.strptime(
-                            timestamp_str, "%Y-%m-%d %H:%M:%S"
-                        ).isoformat()
-                    except Exception:
-                        backup_info.created_at = datetime.fromtimestamp(
-                            backup_file.stat().st_mtime
-                        ).isoformat()
+            # Try to read manifest from zip (only for unencrypted)
+            if not is_encrypted:
+                try:
+                    with zipfile.ZipFile(backup_file, 'r') as zipf:
+                        if 'backup_manifest.json' in zipf.namelist():
+                            manifest_data = zipf.read('backup_manifest.json')
+                            manifest = json.loads(manifest_data)
+                            backup_info.created_at = manifest.get("created_at", "")
+                            backup_info.patient_count = manifest.get("patient_count", 0)
+                            backup_info.visit_count = manifest.get("visit_count", 0)
+                except Exception as e:
+                    print(f"Error reading manifest from {backup_file}: {e}")
 
-                backups.append(backup_info)
+            # Fallback: extract timestamp from filename
+            if not backup_info.created_at:
+                try:
+                    # backup_2026-01-02_10-30-00.zip -> 2026-01-02 10:30:00
+                    name = backup_file.stem.replace(".encrypted", "")
+                    timestamp_str = name.replace("backup_", "").replace("_", " ", 1).replace("-", ":")
+                    backup_info.created_at = datetime.strptime(
+                        timestamp_str, "%Y-%m-%d %H:%M:%S"
+                    ).isoformat()
+                except Exception:
+                    backup_info.created_at = datetime.fromtimestamp(
+                        backup_file.stat().st_mtime
+                    ).isoformat()
+
+            backups.append(backup_info)
 
         # Sort by created_at (newest first)
         backups.sort(key=lambda x: x.created_at, reverse=True)

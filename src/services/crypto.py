@@ -44,7 +44,8 @@ if not _nacl_available:
 
 
 # Constants
-SALT_SIZE = 32  # 256 bits
+# PyNaCl's argon2id requires exactly 16 bytes for salt
+SALT_SIZE = 16  # 128 bits (required by nacl.pwhash.argon2id)
 NONCE_SIZE = 24  # For XSalsa20 (NaCl) or 12 for AES-GCM
 KEY_SIZE = 32   # 256 bits
 CHUNK_SIZE = 1024 * 1024  # 1 MB chunks for large files
@@ -65,7 +66,7 @@ class EncryptedData:
 
     def to_bytes(self) -> bytes:
         """Serialize to bytes for storage."""
-        # Format: version (1) + salt (32) + nonce (24) + ciphertext
+        # Format: version (1) + salt (16) + nonce (24) + ciphertext
         return (
             self.version.to_bytes(1, 'big') +
             self.salt +

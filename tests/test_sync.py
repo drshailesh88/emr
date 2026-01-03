@@ -27,6 +27,15 @@ class TestLocalStorageBackend:
             yield Path(f.name)
             Path(f.name).unlink(missing_ok=True)
 
+    @pytest.fixture
+    def large_test_file(self):
+        """Create a larger test file for progress callback testing."""
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            # Write 1MB to ensure progress callbacks are triggered
+            f.write(b"X" * (1024 * 1024))
+            yield Path(f.name)
+            Path(f.name).unlink(missing_ok=True)
+
     def test_upload_and_download(self, backend, test_file):
         """Test uploading and downloading a file."""
         remote_key = "test/file.txt"
@@ -86,15 +95,15 @@ class TestLocalStorageBackend:
         assert metadata['size'] == test_file.stat().st_size
         assert 'modified' in metadata
 
-    def test_progress_callback(self, backend, test_file):
-        """Test upload progress callback."""
+    def test_progress_callback(self, backend, large_test_file):
+        """Test upload progress callback with large file."""
         remote_key = "test/progress.txt"
         progress_calls = []
 
         def callback(transferred, total):
             progress_calls.append((transferred, total))
 
-        backend.upload(test_file, remote_key, progress_callback=callback)
+        backend.upload(large_test_file, remote_key, progress_callback=callback)
 
         assert len(progress_calls) > 0
         # Last call should show complete

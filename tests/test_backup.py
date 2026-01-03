@@ -131,8 +131,10 @@ class TestBackupService:
 
     def test_list_backups(self, backup_service):
         """Test listing backups."""
-        # Create multiple backups
+        import time
+        # Create multiple backups with delay to ensure different timestamps
         backup_service.create_backup()
+        time.sleep(1.1)  # Ensure different second in filename
         backup_service.create_backup()
 
         backups = backup_service.list_backups()
