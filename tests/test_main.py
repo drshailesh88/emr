@@ -176,16 +176,21 @@ class TestMainEntryPoint:
         # Should still call run_app
         mock_run_app.assert_called_once()
 
-    @patch('main.sys.exit')
+    @patch('main.run_app')
     @patch('main.check_dependencies')
-    def test_main_exits_if_dependencies_missing(self, mock_deps, mock_exit, capsys):
+    def test_main_exits_if_dependencies_missing(self, mock_deps, mock_run_app, capsys):
         """Test that main exits if dependencies are missing."""
         mock_deps.return_value = False
 
         from main import main
-        main()
 
-        mock_exit.assert_called_with(1)
+        # sys.exit(1) will raise SystemExit
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 1
+        # run_app should not be called
+        mock_run_app.assert_not_called()
 
     def test_main_prints_header(self, capsys):
         """Test that main prints header."""

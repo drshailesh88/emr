@@ -1,5 +1,6 @@
 """Local LLM service via Ollama with RAM-based model selection."""
 
+import logging
 import json
 import os
 import requests
@@ -8,6 +9,8 @@ from typing import Optional, Tuple
 from pathlib import Path
 
 from ..models.schemas import Prescription
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -20,15 +23,43 @@ class LLMService:
         (float("inf"), "qwen2.5:7b"),  # > 10GB RAM
     ]
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: Optional[str] = None, model: Optional[str] = None):
+        """Initialize LLM service.
+
+        Args:
+            base_url: Ollama API base URL (defaults to env var or localhost:11434)
+            model: Model name to use (if None, auto-selects based on RAM)
+        """
         if base_url is None:
             base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.base_url = base_url
-        self.model = self._select_model()
+
+        # Allow model override for testing
+        if model is not None:
+            self.model = model
+        else:
+            self.model = self._select_model()
+
         self._load_prompts()
 
+    @classmethod
+    def for_testing(cls, model: str = "qwen2.5:1.5b", base_url: str = "http://localhost:11434"):
+        """Create an LLM service instance for testing.
+
+        Args:
+            model: Model name to use (defaults to smallest model)
+            base_url: Ollama API base URL
+
+        Returns:
+            LLMService instance configured for testing
+        """
+        return cls(base_url=base_url, model=model)
+
     def _get_available_ram_gb(self) -> float:
-        """Get available system RAM in GB."""
+        """Get available system RAM in GB.
+
+        This method is extracted for easy mocking in tests.
+        """
         mem = psutil.virtual_memory()
         return mem.total / (1024 ** 3)
 
@@ -37,7 +68,7 @@ class LLMService:
         ram_gb = self._get_available_ram_gb()
         for threshold, model in self.MODEL_TIERS:
             if ram_gb < threshold:
-                print(f"System RAM: {ram_gb:.1f}GB - Selected model: {model}")
+                logger.info(f"System RAM: {ram_gb:.1f}GB - Selected model: {model}")
                 return model
         return self.MODEL_TIERS[-1][1]
 
@@ -133,7 +164,7 @@ ANSWER (be concise and clinical):"""
                     return True, f"Model {self.model} is ready."
 
             # Pull the model if not exists
-            print(f"Pulling model {self.model}... This may take a few minutes.")
+            logger.info(f"Pulling model {self.model}... This may take a few minutes.")
             response = requests.post(
                 f"{self.base_url}/api/pull",
                 json={"name": self.model},

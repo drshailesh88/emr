@@ -1,11 +1,14 @@
 """RAG service using ChromaDB for local vector storage."""
 
+import logging
 import chromadb
 from chromadb.config import Settings
 from pathlib import Path
 from typing import List, Tuple, Optional
 import hashlib
 import os
+
+logger = logging.getLogger(__name__)
 
 
 class RAGService:
@@ -55,8 +58,8 @@ class RAGService:
             existing = self.patient_summaries.get(ids=[doc_id])
             if existing and existing["ids"]:
                 self.patient_summaries.delete(ids=[doc_id])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not check/delete existing patient summary for patient {patient_id}: {e}")
 
         self.patient_summaries.add(
             documents=[summary],
@@ -93,7 +96,7 @@ class RAGService:
             return output
 
         except Exception as e:
-            print(f"Patient search error: {e}")
+            logger.error(f"Patient search error: {e}")
             return []
 
     # ============== PATIENT DOCUMENT OPERATIONS ==============
@@ -139,7 +142,7 @@ class RAGService:
             if results and results["ids"]:
                 self.patient_documents.delete(ids=results["ids"])
         except Exception as e:
-            print(f"Error clearing patient documents: {e}")
+            logger.error(f"Error clearing patient documents for patient {patient_id}: {e}")
 
     def query_patient_context(
         self,
@@ -178,7 +181,7 @@ class RAGService:
             return "No relevant records found for this patient."
 
         except Exception as e:
-            print(f"RAG query error: {e}")
+            logger.error(f"RAG query error for patient {patient_id}: {e}")
             return f"Error searching records: {str(e)}"
 
     def get_patient_document_count(self, patient_id: int) -> int:
@@ -188,7 +191,8 @@ class RAGService:
                 where={"patient_id": patient_id}
             )
             return len(results["ids"]) if results and results["ids"] else 0
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not get document count for patient {patient_id}: {e}")
             return 0
 
     def get_all_patient_ids(self) -> List[int]:
@@ -198,7 +202,8 @@ class RAGService:
             if results and results["metadatas"]:
                 return [m["patient_id"] for m in results["metadatas"]]
             return []
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not retrieve patient IDs from summaries: {e}")
             return []
 
     def reindex_patient(self, patient_id: int, summary: str, documents: List[Tuple[str, str, dict]]):

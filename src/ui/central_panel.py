@@ -4,9 +4,12 @@ import flet as ft
 from typing import Callable, Optional, List
 import json
 from datetime import date
+import logging
 
 from ..models.schemas import Patient, Visit, Prescription, Medication
 from ..services.llm import LLMService
+
+logger = logging.getLogger(__name__)
 
 
 class CentralPanel:
@@ -176,6 +179,7 @@ class CentralPanel:
 
     def set_patient(self, patient: Patient):
         """Set the current patient."""
+        logger.debug(f"Setting current patient: {patient.name} (ID: {patient.id})")
         self.current_patient = patient
         self.current_prescription = None
 
@@ -257,8 +261,10 @@ class CentralPanel:
                         size=12,
                         color=ft.Colors.GREY_600,
                     ))
-            except:
-                pass
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing prescription JSON for visit {visit.id}: {e}")
+            except Exception as e:
+                logger.error(f"Error displaying prescription for visit {visit.id}: {e}", exc_info=True)
 
         return ft.Container(
             content=ft.Column([
@@ -286,6 +292,7 @@ class CentralPanel:
 
     def _load_visit(self, visit: Visit):
         """Load a previous visit into the form."""
+        logger.debug(f"Loading visit {visit.id} into form")
         self.complaint_field.value = visit.chief_complaint or ""
         self.notes_field.value = visit.clinical_notes or ""
 
@@ -294,8 +301,10 @@ class CentralPanel:
                 rx_data = json.loads(visit.prescription_json)
                 self.current_prescription = Prescription(**rx_data)
                 self._display_prescription(self.current_prescription)
-            except:
-                pass
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing prescription JSON for visit {visit.id}: {e}")
+            except Exception as e:
+                logger.error(f"Error loading prescription for visit {visit.id}: {e}", exc_info=True)
 
         self.tabs.selected_index = 0
         if self.tabs.page:
@@ -305,9 +314,11 @@ class CentralPanel:
         """Handle generate prescription click."""
         clinical_notes = self.notes_field.value.strip()
         if not clinical_notes:
+            logger.debug("Generate prescription attempted without clinical notes")
             self._show_snackbar("Please enter clinical notes first", error=True)
             return
 
+        logger.info("Generating prescription from UI")
         # Show loading
         self.loading_indicator.visible = True
         self.generate_btn.disabled = True
@@ -318,11 +329,13 @@ class CentralPanel:
             self.generate_btn.disabled = False
 
             if success and prescription:
+                logger.debug("Prescription received, displaying in UI")
                 self.current_prescription = prescription
                 self._display_prescription(prescription)
                 self.save_btn.disabled = False
                 self.print_btn.disabled = False
             else:
+                logger.warning(f"Prescription generation failed in UI callback: {raw[:100]}")
                 self.rx_display.controls.clear()
                 self.rx_display.controls.append(
                     ft.Text(f"Error: {raw}", color=ft.Colors.RED_600)
@@ -415,40 +428,52 @@ class CentralPanel:
     def _on_save_click(self, e):
         """Handle save visit click."""
         if not self.current_patient or not self.current_prescription:
+            logger.warning("Save visit attempted without patient or prescription")
             return
 
-        # Get diagnosis from prescription
-        diagnosis = ", ".join(self.current_prescription.diagnosis) if self.current_prescription.diagnosis else ""
+        logger.info("Saving visit from UI")
+        try:
+            # Get diagnosis from prescription
+            diagnosis = ", ".join(self.current_prescription.diagnosis) if self.current_prescription.diagnosis else ""
 
-        visit_data = {
-            "chief_complaint": self.complaint_field.value.strip(),
-            "clinical_notes": self.notes_field.value.strip(),
-            "diagnosis": diagnosis,
-            "prescription_json": self.current_prescription.model_dump_json(),
-        }
+            visit_data = {
+                "chief_complaint": self.complaint_field.value.strip(),
+                "clinical_notes": self.notes_field.value.strip(),
+                "diagnosis": diagnosis,
+                "prescription_json": self.current_prescription.model_dump_json(),
+            }
 
-        success = self.on_save_visit(visit_data)
-        if success:
-            self._show_snackbar("Visit saved successfully")
-            # Refresh visits
-            # This would be called from the parent, but for now just disable save
-            self.save_btn.disabled = True
-            e.page.update()
+            success = self.on_save_visit(visit_data)
+            if success:
+                self._show_snackbar("Visit saved successfully")
+                # Refresh visits
+                # This would be called from the parent, but for now just disable save
+                self.save_btn.disabled = True
+                e.page.update()
+        except Exception as e:
+            logger.error(f"Error in save visit UI handler: {e}", exc_info=True)
+            self._show_snackbar("Error saving visit", error=True)
 
     def _on_print_click(self, e):
         """Handle print PDF click."""
         if not self.current_prescription:
+            logger.warning("Print PDF attempted without prescription")
             return
 
-        filepath = self.on_print_pdf(
-            self.current_prescription,
-            self.complaint_field.value.strip()
-        )
+        logger.info("Generating PDF from UI")
+        try:
+            filepath = self.on_print_pdf(
+                self.current_prescription,
+                self.complaint_field.value.strip()
+            )
 
-        if filepath:
-            self._show_snackbar(f"PDF saved: {filepath}")
-        else:
-            self._show_snackbar("Failed to generate PDF", error=True)
+            if filepath:
+                self._show_snackbar(f"PDF saved: {filepath}")
+            else:
+                self._show_snackbar("Failed to generate PDF", error=True)
+        except Exception as e:
+            logger.error(f"Error in print PDF UI handler: {e}", exc_info=True)
+            self._show_snackbar("Error generating PDF", error=True)
 
     def _show_snackbar(self, message: str, error: bool = False):
         """Show a snackbar message."""

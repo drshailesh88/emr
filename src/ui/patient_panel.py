@@ -2,10 +2,13 @@
 
 import flet as ft
 from typing import List, Callable, Optional
+import logging
 
 from ..models.schemas import Patient
 from ..services.database import DatabaseService
 from ..services.rag import RAGService
+
+logger = logging.getLogger(__name__)
 
 
 class PatientPanel:
@@ -140,6 +143,7 @@ class PatientPanel:
 
     def _select_patient(self, patient: Patient):
         """Handle patient selection."""
+        logger.debug(f"Patient selected: {patient.name} (ID: {patient.id})")
         self.selected_patient_id = patient.id
         self._refresh_list()
         self.on_patient_selected(patient)
@@ -180,17 +184,26 @@ class PatientPanel:
                 page.update()
                 return
 
-            patient_data = {
-                "name": name_field.value.strip(),
-                "age": int(age_field.value) if age_field.value else None,
-                "gender": gender_dropdown.value,
-                "phone": phone_field.value.strip() if phone_field.value else None,
-                "address": address_field.value.strip() if address_field.value else None,
-            }
+            try:
+                patient_data = {
+                    "name": name_field.value.strip(),
+                    "age": int(age_field.value) if age_field.value else None,
+                    "gender": gender_dropdown.value,
+                    "phone": phone_field.value.strip() if phone_field.value else None,
+                    "address": address_field.value.strip() if address_field.value else None,
+                }
 
-            dialog.open = False
-            page.update()
-            self.on_new_patient(patient_data)
+                dialog.open = False
+                page.update()
+                self.on_new_patient(patient_data)
+            except ValueError as e:
+                logger.error(f"Invalid patient data: {e}", exc_info=True)
+                error_text.value = "Invalid data. Please check age is a number."
+                page.update()
+            except Exception as e:
+                logger.error(f"Error saving patient from dialog: {e}", exc_info=True)
+                error_text.value = "Error saving patient"
+                page.update()
 
         def close_dialog(e):
             dialog.open = False

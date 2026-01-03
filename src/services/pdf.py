@@ -1,6 +1,8 @@
 """PDF generation service for prescriptions."""
 
+import logging
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from pathlib import Path
 from datetime import date
 from typing import Optional
@@ -8,6 +10,8 @@ import json
 import os
 
 from ..models.schemas import Patient, Prescription
+
+logger = logging.getLogger(__name__)
 
 
 class PDFService:
@@ -41,16 +45,16 @@ class PDFService:
             # Header
             pdf.set_font("Helvetica", "B", 16)
             if clinic_name:
-                pdf.cell(0, 10, clinic_name, ln=True, align="C")
+                pdf.cell(0, 10, clinic_name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
             if clinic_address:
                 pdf.set_font("Helvetica", "", 10)
-                pdf.cell(0, 5, clinic_address, ln=True, align="C")
+                pdf.cell(0, 5, clinic_address, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
 
             pdf.ln(5)
 
             # Doctor name
             pdf.set_font("Helvetica", "B", 12)
-            pdf.cell(0, 8, doctor_name, ln=True, align="C")
+            pdf.cell(0, 8, doctor_name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
 
             # Line separator
             pdf.set_draw_color(0, 0, 0)
@@ -59,7 +63,7 @@ class PDFService:
 
             # Patient Info
             pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(0, 6, "PATIENT DETAILS", ln=True)
+            pdf.cell(0, 6, "PATIENT DETAILS", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("Helvetica", "", 10)
 
             patient_info = f"Name: {patient.name}"
@@ -70,15 +74,15 @@ class PDFService:
             if patient.uhid:
                 patient_info += f"  |  UHID: {patient.uhid}"
 
-            pdf.cell(0, 5, patient_info, ln=True)
-            pdf.cell(0, 5, f"Date: {date.today().strftime('%d-%b-%Y')}", ln=True)
+            pdf.cell(0, 5, patient_info, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, 5, f"Date: {date.today().strftime('%d-%b-%Y')}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             pdf.ln(3)
 
             # Chief Complaint
             if chief_complaint:
                 pdf.set_font("Helvetica", "B", 10)
-                pdf.cell(0, 6, "Chief Complaint:", ln=True)
+                pdf.cell(0, 6, "Chief Complaint:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_font("Helvetica", "", 10)
                 pdf.multi_cell(0, 5, chief_complaint)
                 pdf.ln(2)
@@ -86,10 +90,10 @@ class PDFService:
             # Diagnosis
             if prescription.diagnosis:
                 pdf.set_font("Helvetica", "B", 10)
-                pdf.cell(0, 6, "Diagnosis:", ln=True)
+                pdf.cell(0, 6, "Diagnosis:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_font("Helvetica", "", 10)
                 for dx in prescription.diagnosis:
-                    pdf.cell(0, 5, f"  - {dx}", ln=True)
+                    pdf.cell(0, 5, f"  - {dx}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.ln(2)
 
             # Line separator
@@ -98,7 +102,7 @@ class PDFService:
 
             # Rx Symbol
             pdf.set_font("Helvetica", "B", 14)
-            pdf.cell(0, 8, "Rx", ln=True)
+            pdf.cell(0, 8, "Rx", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             # Medications
             pdf.set_font("Helvetica", "", 10)
@@ -110,7 +114,7 @@ class PDFService:
                     med_line += f" ({med.form})"
 
                 pdf.set_font("Helvetica", "B", 10)
-                pdf.cell(0, 6, med_line, ln=True)
+                pdf.cell(0, 6, med_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
                 dosage_line = f"   {med.dose} {med.frequency}"
                 if med.duration:
@@ -119,32 +123,32 @@ class PDFService:
                     dosage_line += f" - {med.instructions}"
 
                 pdf.set_font("Helvetica", "", 10)
-                pdf.cell(0, 5, dosage_line, ln=True)
+                pdf.cell(0, 5, dosage_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             pdf.ln(3)
 
             # Investigations
             if prescription.investigations:
                 pdf.set_font("Helvetica", "B", 10)
-                pdf.cell(0, 6, "Investigations Advised:", ln=True)
+                pdf.cell(0, 6, "Investigations Advised:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_font("Helvetica", "", 10)
                 for inv in prescription.investigations:
-                    pdf.cell(0, 5, f"  - {inv}", ln=True)
+                    pdf.cell(0, 5, f"  - {inv}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.ln(2)
 
             # Advice
             if prescription.advice:
                 pdf.set_font("Helvetica", "B", 10)
-                pdf.cell(0, 6, "Advice:", ln=True)
+                pdf.cell(0, 6, "Advice:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_font("Helvetica", "", 10)
                 for adv in prescription.advice:
-                    pdf.cell(0, 5, f"  - {adv}", ln=True)
+                    pdf.cell(0, 5, f"  - {adv}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.ln(2)
 
             # Follow-up
             if prescription.follow_up:
                 pdf.set_font("Helvetica", "B", 10)
-                pdf.cell(0, 6, f"Follow-up: {prescription.follow_up}", ln=True)
+                pdf.cell(0, 6, f"Follow-up: {prescription.follow_up}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.ln(2)
 
             # Red Flags
@@ -152,17 +156,17 @@ class PDFService:
                 pdf.ln(3)
                 pdf.set_fill_color(255, 240, 240)
                 pdf.set_font("Helvetica", "B", 10)
-                pdf.cell(0, 6, "RED FLAGS - Seek immediate attention if:", ln=True, fill=True)
+                pdf.cell(0, 6, "RED FLAGS - Seek immediate attention if:", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
                 pdf.set_font("Helvetica", "", 10)
                 for flag in prescription.red_flags:
-                    pdf.cell(0, 5, f"  ! {flag}", ln=True, fill=True)
+                    pdf.cell(0, 5, f"  ! {flag}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
 
             # Footer
             pdf.ln(10)
             pdf.line(10, pdf.get_y(), 200, pdf.get_y())
             pdf.ln(5)
             pdf.set_font("Helvetica", "I", 8)
-            pdf.cell(0, 5, "This is a computer-generated prescription.", ln=True, align="C")
+            pdf.cell(0, 5, "This is a computer-generated prescription.", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
 
             # Generate filename
             safe_name = "".join(c for c in patient.name if c.isalnum() or c in " -_")[:30]
@@ -170,10 +174,11 @@ class PDFService:
             filepath = self.output_dir / filename
 
             pdf.output(str(filepath))
+            logger.info(f"Generated prescription PDF: {filepath}")
             return str(filepath)
 
         except Exception as e:
-            print(f"PDF generation error: {e}")
+            logger.error(f"PDF generation error for patient {patient.name}: {e}")
             return None
 
     def prescription_to_text(self, patient: Patient, prescription: Prescription) -> str:
