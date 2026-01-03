@@ -8,11 +8,13 @@ from ..services.database import DatabaseService
 from ..services.llm import LLMService
 from ..services.rag import RAGService
 from ..services.pdf import PDFService
+from ..services.backup import BackupService
 from ..models.schemas import Patient, Visit, Prescription
 
 from .patient_panel import PatientPanel
 from .central_panel import CentralPanel
 from .agent_panel import AgentPanel
+from .backup_dialog import show_backup_dialog
 
 
 class DocAssistApp:
@@ -23,6 +25,7 @@ class DocAssistApp:
         self.llm = LLMService()
         self.rag = RAGService()
         self.pdf = PDFService()
+        self.backup = BackupService()
 
         self.current_patient: Optional[Patient] = None
         self.page: Optional[ft.Page] = None
@@ -99,6 +102,11 @@ class DocAssistApp:
                     ], spacing=10),
                     ft.Row([
                         self.status_bar,
+                        ft.IconButton(
+                            icon=ft.Icons.BACKUP,
+                            tooltip="Backup & Restore",
+                            on_click=self._on_backup_click
+                        ),
                         ft.IconButton(
                             icon=ft.Icons.SETTINGS,
                             tooltip="Settings",
@@ -322,6 +330,10 @@ class DocAssistApp:
                 self.page.run_thread_safe(lambda: self._update_status("Query complete"))
 
         threading.Thread(target=query, daemon=True).start()
+
+    def _on_backup_click(self, e):
+        """Handle backup button click."""
+        show_backup_dialog(self.page, self.backup)
 
     def _on_settings_click(self, e):
         """Handle settings click."""
