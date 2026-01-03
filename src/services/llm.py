@@ -1,45 +1,126 @@
-"""Local LLM service via Ollama with RAM-based model selection."""
+"""Local LLM service via Ollama with RAM-based model selection.
+
+Key improvements from original:
+1. Uses AVAILABLE RAM, not total RAM for model selection
+2. Includes smaller model tiers for low-RAM systems
+3. Implements fallback ladder if preferred model unavailable
+4. Adds context length limits to prevent OOM
+5. Supports model override via environment variable
+"""
 
 import json
 import os
+import gc
 import requests
 import psutil
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from pathlib import Path
+from datetime import datetime
 
 from ..models.schemas import Prescription
 
 
 class LLMService:
-    """Handles all LLM operations via Ollama."""
+    """Handles all LLM operations via Ollama with intelligent RAM management."""
 
-    # RAM thresholds for model selection (in GB)
+    # RAM thresholds for model selection (based on AVAILABLE RAM, not total)
+    # Format: (available_ram_threshold_gb, model_name, context_length)
     MODEL_TIERS = [
-        (6, "qwen2.5:1.5b"),   # < 6GB RAM
-        (10, "qwen2.5:3b"),    # 6-10GB RAM
-        (float("inf"), "qwen2.5:7b"),  # > 10GB RAM
+        # Minimal mode - for systems with <2GB available
+        (2, "qwen2.5:0.5b", 1024),     # ~400MB model
+        # Low RAM mode - 2-4GB available
+        (4, "qwen2.5:1.5b", 2048),     # ~1.2GB model
+        # Standard mode - 4-8GB available
+        (8, "qwen2.5:3b", 4096),       # ~2.5GB model
+        # Full mode - 8GB+ available
+        (float("inf"), "qwen2.5:7b", 8192),  # ~5GB model
     ]
 
-    def __init__(self, base_url: Optional[str] = None):
+    # Fallback chain - if primary model fails, try these in order
+    FALLBACK_MODELS = [
+        "qwen2.5:1.5b",
+        "qwen2.5:0.5b",
+        "tinyllama:latest",
+        "phi:latest",
+    ]
+
+    # Minimum RAM reserve (don't use if less than this available)
+    MIN_RAM_RESERVE_GB = 1.0
+
+    def __init__(self, base_url: Optional[str] = None, model_override: Optional[str] = None):
+        """
+        Initialize LLM service.
+
+        Args:
+            base_url: Ollama API URL (default: http://localhost:11434)
+            model_override: Force specific model (ignores RAM-based selection)
+        """
         if base_url is None:
             base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.base_url = base_url
-        self.model = self._select_model()
+
+        # Check for model override from env or parameter
+        self.model_override = model_override or os.getenv("EMR_LLM_MODEL")
+        self.model, self.context_length = self._select_model()
+
+        # Track model load status
+        self._model_loaded = False
+        self._last_used = None
+
         self._load_prompts()
 
     def _get_available_ram_gb(self) -> float:
-        """Get available system RAM in GB."""
+        """Get AVAILABLE (not total) system RAM in GB."""
+        mem = psutil.virtual_memory()
+        # Use available, not total - this is the key fix
+        return mem.available / (1024 ** 3)
+
+    def _get_total_ram_gb(self) -> float:
+        """Get total system RAM in GB."""
         mem = psutil.virtual_memory()
         return mem.total / (1024 ** 3)
 
-    def _select_model(self) -> str:
-        """Select appropriate model based on available RAM."""
-        ram_gb = self._get_available_ram_gb()
-        for threshold, model in self.MODEL_TIERS:
-            if ram_gb < threshold:
-                print(f"System RAM: {ram_gb:.1f}GB - Selected model: {model}")
-                return model
-        return self.MODEL_TIERS[-1][1]
+    def _select_model(self) -> Tuple[str, int]:
+        """
+        Select appropriate model based on AVAILABLE RAM.
+
+        Returns:
+            (model_name, context_length)
+        """
+        # Honor override if set
+        if self.model_override:
+            print(f"Using model override: {self.model_override}")
+            return self.model_override, 4096  # Default context for overrides
+
+        available_ram = self._get_available_ram_gb()
+        total_ram = self._get_total_ram_gb()
+
+        # Check if we have minimum RAM
+        if available_ram < self.MIN_RAM_RESERVE_GB:
+            print(f"⚠️ Warning: Only {available_ram:.1f}GB RAM available. LLM may not work reliably.")
+
+        # Select model based on available RAM
+        for threshold, model, context in self.MODEL_TIERS:
+            if available_ram < threshold:
+                print(f"RAM: {available_ram:.1f}GB available (of {total_ram:.1f}GB total)")
+                print(f"Selected model: {model} (context: {context})")
+                return model, context
+
+        # Default to largest if plenty of RAM
+        return self.MODEL_TIERS[-1][1], self.MODEL_TIERS[-1][2]
+
+    def _get_conservative_context_length(self) -> int:
+        """Get conservative context length based on current RAM state."""
+        available_ram = self._get_available_ram_gb()
+
+        if available_ram < 2:
+            return 512
+        elif available_ram < 4:
+            return 1024
+        elif available_ram < 8:
+            return 2048
+        else:
+            return self.context_length
 
     def _load_prompts(self):
         """Load prompt templates."""
@@ -146,12 +227,20 @@ ANSWER (be concise and clinical):"""
         except requests.RequestException as e:
             return False, f"Error checking/pulling model: {str(e)}"
 
-    def generate(self, prompt: str, json_mode: bool = False) -> Tuple[bool, str]:
-        """Generate response from LLM.
+    def generate(
+        self,
+        prompt: str,
+        json_mode: bool = False,
+        timeout: int = 120,
+        max_tokens: Optional[int] = None
+    ) -> Tuple[bool, str]:
+        """Generate response from LLM with memory-aware settings.
 
         Args:
             prompt: The prompt to send
             json_mode: If True, expect JSON output
+            timeout: Request timeout in seconds
+            max_tokens: Maximum tokens to generate (default: auto based on RAM)
 
         Returns:
             (success, response_or_error)
@@ -159,30 +248,127 @@ ANSWER (be concise and clinical):"""
         if not self.is_available():
             return False, "Ollama is not running. Please start Ollama."
 
+        # Check RAM before generation
+        available_ram = self._get_available_ram_gb()
+        if available_ram < self.MIN_RAM_RESERVE_GB:
+            # Try to free memory
+            gc.collect()
+            available_ram = self._get_available_ram_gb()
+            if available_ram < self.MIN_RAM_RESERVE_GB:
+                return False, f"Insufficient RAM ({available_ram:.1f}GB). Close other applications."
+
+        # Get conservative context length based on current RAM
+        context_len = self._get_conservative_context_length()
+
+        # Truncate prompt if too long (rough estimate: 4 chars per token)
+        max_prompt_chars = context_len * 3  # Leave room for response
+        if len(prompt) > max_prompt_chars:
+            prompt = prompt[:max_prompt_chars] + "\n[TRUNCATED - Context too long]"
+            print(f"Warning: Prompt truncated to {max_prompt_chars} chars")
+
         try:
             payload = {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
+                "options": {
+                    "num_ctx": context_len,
+                    "num_predict": max_tokens or 1024,
+                }
             }
             if json_mode:
                 payload["format"] = "json"
 
+            self._last_used = datetime.now()
+
             response = requests.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
-                timeout=120  # 2 minutes
+                timeout=timeout
             )
 
             if response.status_code == 200:
                 result = response.json()
                 return True, result.get("response", "")
-            return False, f"API error: {response.status_code}"
+
+            # Handle specific error codes
+            if response.status_code == 500:
+                error_text = response.text.lower()
+                if "out of memory" in error_text or "oom" in error_text:
+                    return False, "Out of memory. Try closing other applications or using a smaller model."
+                if "model not found" in error_text:
+                    # Try fallback model
+                    return self._generate_with_fallback(prompt, json_mode, timeout)
+
+            return False, f"API error: {response.status_code} - {response.text[:200]}"
 
         except requests.Timeout:
-            return False, "Request timed out. Try again."
+            return False, "Request timed out. The model may be too large for your system."
         except requests.RequestException as e:
             return False, f"Request failed: {str(e)}"
+
+    def _generate_with_fallback(
+        self,
+        prompt: str,
+        json_mode: bool,
+        timeout: int
+    ) -> Tuple[bool, str]:
+        """Try generation with fallback models."""
+        for fallback in self.FALLBACK_MODELS:
+            if fallback == self.model:
+                continue  # Skip current model
+
+            print(f"Trying fallback model: {fallback}")
+            try:
+                payload = {
+                    "model": fallback,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "num_ctx": 1024,  # Conservative for fallbacks
+                        "num_predict": 512,
+                    }
+                }
+                if json_mode:
+                    payload["format"] = "json"
+
+                response = requests.post(
+                    f"{self.base_url}/api/generate",
+                    json=payload,
+                    timeout=timeout
+                )
+
+                if response.status_code == 200:
+                    self.model = fallback  # Switch to working model
+                    result = response.json()
+                    return True, result.get("response", "")
+
+            except Exception:
+                continue
+
+        return False, "All models failed. Please check Ollama installation."
+
+    def unload_model(self) -> bool:
+        """Attempt to unload model from memory (if supported by Ollama)."""
+        try:
+            # Ollama doesn't have explicit unload, but we can try
+            # to minimize memory by calling garbage collection
+            gc.collect()
+
+            # Some Ollama versions support keep_alive: 0 to unload
+            requests.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": "",
+                    "keep_alive": 0  # Unload immediately
+                },
+                timeout=5
+            )
+            self._model_loaded = False
+            return True
+        except Exception:
+            return False
 
     def generate_prescription(self, clinical_notes: str) -> Tuple[bool, Optional[Prescription], str]:
         """Generate structured prescription from clinical notes.
@@ -229,9 +415,39 @@ ANSWER (be concise and clinical):"""
         return self.generate(full_prompt, json_mode=False)
 
     def get_model_info(self) -> dict:
-        """Get information about the current model."""
+        """Get detailed information about the current model and system."""
         return {
             "model": self.model,
-            "ram_gb": self._get_available_ram_gb(),
-            "ollama_available": self.is_available()
+            "context_length": self.context_length,
+            "ram_available_gb": round(self._get_available_ram_gb(), 2),
+            "ram_total_gb": round(self._get_total_ram_gb(), 2),
+            "ram_percent_used": round(psutil.virtual_memory().percent, 1),
+            "ollama_available": self.is_available(),
+            "model_override": self.model_override,
+            "last_used": self._last_used.isoformat() if self._last_used else None,
+        }
+
+    def get_health_status(self) -> dict:
+        """Get health status for monitoring."""
+        available_ram = self._get_available_ram_gb()
+
+        status = "healthy"
+        warnings = []
+
+        if available_ram < 1.5:
+            status = "critical"
+            warnings.append("Very low RAM available")
+        elif available_ram < 3:
+            status = "warning"
+            warnings.append("Low RAM available")
+
+        if not self.is_available():
+            status = "unavailable"
+            warnings.append("Ollama not running")
+
+        return {
+            "status": status,
+            "warnings": warnings,
+            "model": self.model,
+            "ram_available_gb": round(available_ram, 2),
         }
