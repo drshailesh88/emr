@@ -1,0 +1,37 @@
+name = "docassist-cloud"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+node_compat = true
+
+# R2 Bucket for encrypted backups
+[[r2_buckets]]
+binding = "BACKUP_BUCKET"
+bucket_name = "docassist-backups"
+preview_bucket_name = "docassist-backups-preview"
+
+# KV Namespace for API keys
+# Create with: wrangler kv:namespace create "API_KEYS"
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "YOUR_API_KEYS_KV_ID"
+preview_id = "YOUR_API_KEYS_PREVIEW_KV_ID"
+
+# KV Namespace for usage tracking
+# Create with: wrangler kv:namespace create "USAGE"
+[[kv_namespaces]]
+binding = "USAGE"
+id = "YOUR_USAGE_KV_ID"
+preview_id = "YOUR_USAGE_PREVIEW_KV_ID"
+
+# KV Namespace for rate limiting
+# Create with: wrangler kv:namespace create "RATE_LIMIT"
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "YOUR_RATE_LIMIT_KV_ID"
+preview_id = "YOUR_RATE_LIMIT_PREVIEW_KV_ID"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"
+MAX_REQUESTS_PER_MINUTE = "100"
+MAX_BACKUP_SIZE_MB = "100"
