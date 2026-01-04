@@ -6,3 +6,9 @@ sentence-transformers>=2.2.2
 fpdf2>=2.7.0
 psutil>=5.9.0
 python-dotenv>=1.0.0
+
+# Voice input (optional - install for dictation)
+# pip install faster-whisper sounddevice numpy
+# faster-whisper>=0.10.0
+# sounddevice>=0.4.6
+# numpy>=1.24.0

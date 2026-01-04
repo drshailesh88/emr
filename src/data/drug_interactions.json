@@ -1,0 +1,402 @@
+[
+  {
+    "drug1": "Warfarin",
+    "drug2": "Aspirin",
+    "severity": "Severe",
+    "effect": "Increased risk of bleeding",
+    "mechanism": "Both affect coagulation pathways; aspirin inhibits platelets while warfarin inhibits vitamin K-dependent clotting factors",
+    "recommendation": "Avoid combination if possible. If necessary, use low-dose aspirin and monitor INR weekly. Watch for signs of bleeding."
+  },
+  {
+    "drug1": "Warfarin",
+    "drug2": "Ibuprofen",
+    "severity": "Severe",
+    "effect": "Increased risk of GI bleeding and elevated INR",
+    "mechanism": "NSAIDs inhibit platelets and may displace warfarin from protein binding",
+    "recommendation": "Avoid NSAIDs. Use paracetamol for pain. If NSAID essential, add PPI and monitor INR closely."
+  },
+  {
+    "drug1": "ACE Inhibitor",
+    "drug2": "Potassium",
+    "severity": "Moderate",
+    "effect": "Risk of hyperkalemia",
+    "mechanism": "ACE inhibitors reduce aldosterone, decreasing potassium excretion",
+    "recommendation": "Monitor serum potassium regularly. Avoid potassium supplements unless truly deficient."
+  },
+  {
+    "drug1": "ACE Inhibitor",
+    "drug2": "Spironolactone",
+    "severity": "Moderate",
+    "effect": "Increased risk of hyperkalemia",
+    "mechanism": "Both drugs increase potassium retention",
+    "recommendation": "Start spironolactone at low dose. Monitor potassium within 1 week and regularly thereafter."
+  },
+  {
+    "drug1": "Metformin",
+    "drug2": "Contrast",
+    "severity": "Contraindicated",
+    "effect": "Risk of lactic acidosis",
+    "mechanism": "IV contrast can cause acute kidney injury, impairing metformin clearance",
+    "recommendation": "Hold metformin 48 hours before and after IV contrast. Check creatinine before restarting."
+  },
+  {
+    "drug1": "Statin",
+    "drug2": "Fibrate",
+    "severity": "Moderate",
+    "effect": "Increased risk of myopathy and rhabdomyolysis",
+    "mechanism": "Both drugs can cause muscle toxicity; effect is additive",
+    "recommendation": "Avoid gemfibrozil with statins. If fenofibrate needed, use lowest statin dose and monitor for muscle symptoms."
+  },
+  {
+    "drug1": "SSRI",
+    "drug2": "MAOI",
+    "severity": "Contraindicated",
+    "effect": "Serotonin syndrome - potentially fatal",
+    "mechanism": "Combined serotonergic effect leads to dangerous serotonin accumulation",
+    "recommendation": "Never combine. Allow 2-week washout when switching between these drug classes."
+  },
+  {
+    "drug1": "Nitrate",
+    "drug2": "Sildenafil",
+    "severity": "Contraindicated",
+    "effect": "Severe hypotension",
+    "mechanism": "Both cause vasodilation through NO/cGMP pathway; effect is synergistic",
+    "recommendation": "Absolutely contraindicated. Do not use within 24 hours of each other (48 hours for tadalafil)."
+  },
+  {
+    "drug1": "Digoxin",
+    "drug2": "Amiodarone",
+    "severity": "Severe",
+    "effect": "Digoxin toxicity",
+    "mechanism": "Amiodarone inhibits P-glycoprotein, reducing digoxin clearance by 50%",
+    "recommendation": "Reduce digoxin dose by 50% when starting amiodarone. Monitor digoxin levels."
+  },
+  {
+    "drug1": "Digoxin",
+    "drug2": "Verapamil",
+    "severity": "Moderate",
+    "effect": "Increased digoxin levels and bradycardia",
+    "mechanism": "Verapamil inhibits P-glycoprotein and both drugs slow heart rate",
+    "recommendation": "Reduce digoxin dose by 25-50%. Monitor heart rate and digoxin levels."
+  },
+  {
+    "drug1": "Beta Blocker",
+    "drug2": "Verapamil",
+    "severity": "Severe",
+    "effect": "Severe bradycardia and heart block",
+    "mechanism": "Both drugs slow AV conduction",
+    "recommendation": "Avoid combination, especially IV. If oral combination needed, monitor closely."
+  },
+  {
+    "drug1": "Lithium",
+    "drug2": "NSAID",
+    "severity": "Moderate",
+    "effect": "Lithium toxicity",
+    "mechanism": "NSAIDs reduce renal lithium clearance",
+    "recommendation": "Avoid NSAIDs or monitor lithium levels closely. Consider sulindac which may have less effect."
+  },
+  {
+    "drug1": "Lithium",
+    "drug2": "ACE Inhibitor",
+    "severity": "Moderate",
+    "effect": "Lithium toxicity",
+    "mechanism": "ACE inhibitors reduce renal lithium clearance",
+    "recommendation": "Monitor lithium levels when starting or adjusting ACE inhibitor dose."
+  },
+  {
+    "drug1": "Theophylline",
+    "drug2": "Ciprofloxacin",
+    "severity": "Moderate",
+    "effect": "Theophylline toxicity (seizures, arrhythmias)",
+    "mechanism": "Ciprofloxacin inhibits CYP1A2, the main enzyme metabolizing theophylline",
+    "recommendation": "Reduce theophylline dose by 30-50%. Monitor theophylline levels. Consider alternative antibiotic."
+  },
+  {
+    "drug1": "Clopidogrel",
+    "drug2": "Omeprazole",
+    "severity": "Moderate",
+    "effect": "Reduced antiplatelet effect",
+    "mechanism": "Omeprazole inhibits CYP2C19, reducing conversion of clopidogrel to active metabolite",
+    "recommendation": "Use pantoprazole or H2 blocker instead. If omeprazole essential, separate dosing by 12 hours."
+  },
+  {
+    "drug1": "Methotrexate",
+    "drug2": "NSAID",
+    "severity": "Severe",
+    "effect": "Methotrexate toxicity",
+    "mechanism": "NSAIDs reduce renal clearance of methotrexate",
+    "recommendation": "Avoid in high-dose methotrexate. In low-dose, use with caution and monitor CBC."
+  },
+  {
+    "drug1": "Methotrexate",
+    "drug2": "Trimethoprim",
+    "severity": "Severe",
+    "effect": "Severe bone marrow suppression",
+    "mechanism": "Both drugs inhibit folate metabolism",
+    "recommendation": "Avoid combination. Use alternative antibiotic. If essential, supplement with folinic acid."
+  },
+  {
+    "drug1": "Phenytoin",
+    "drug2": "Warfarin",
+    "severity": "Moderate",
+    "effect": "Unpredictable effect on INR",
+    "mechanism": "Complex interaction - initial increase then decrease in warfarin effect",
+    "recommendation": "Monitor INR closely when starting, stopping, or adjusting phenytoin dose."
+  },
+  {
+    "drug1": "Carbamazepine",
+    "drug2": "Oral Contraceptive",
+    "severity": "Moderate",
+    "effect": "Contraceptive failure",
+    "mechanism": "Carbamazepine induces CYP3A4, increasing metabolism of estrogen/progesterone",
+    "recommendation": "Use higher dose OCP or alternative contraception. Consider IUD or depot injections."
+  },
+  {
+    "drug1": "Fluconazole",
+    "drug2": "Warfarin",
+    "severity": "Moderate",
+    "effect": "Increased INR and bleeding risk",
+    "mechanism": "Fluconazole inhibits CYP2C9, reducing warfarin metabolism",
+    "recommendation": "Reduce warfarin dose empirically. Monitor INR within 3-5 days of starting fluconazole."
+  },
+  {
+    "drug1": "Clarithromycin",
+    "drug2": "Statin",
+    "severity": "Moderate",
+    "effect": "Increased risk of myopathy",
+    "mechanism": "Clarithromycin inhibits CYP3A4, increasing statin levels",
+    "recommendation": "Hold statin during clarithromycin course, or use pravastatin/rosuvastatin which are less affected."
+  },
+  {
+    "drug1": "Erythromycin",
+    "drug2": "Theophylline",
+    "severity": "Moderate",
+    "effect": "Theophylline toxicity",
+    "mechanism": "Erythromycin inhibits CYP3A4, reducing theophylline clearance",
+    "recommendation": "Reduce theophylline dose or use azithromycin which has less interaction potential."
+  },
+  {
+    "drug1": "Amlodipine",
+    "drug2": "Simvastatin",
+    "severity": "Moderate",
+    "effect": "Increased statin levels and myopathy risk",
+    "mechanism": "Amlodipine inhibits CYP3A4, reducing simvastatin metabolism",
+    "recommendation": "Limit simvastatin to 20mg/day with amlodipine. Consider alternative statin."
+  },
+  {
+    "drug1": "Potassium",
+    "drug2": "Spironolactone",
+    "severity": "Moderate",
+    "effect": "Hyperkalemia",
+    "mechanism": "Spironolactone is potassium-sparing; additional potassium increases risk",
+    "recommendation": "Avoid potassium supplements with spironolactone unless potassium is truly low."
+  },
+  {
+    "drug1": "Tramadol",
+    "drug2": "SSRI",
+    "severity": "Moderate",
+    "effect": "Increased seizure risk and serotonin syndrome",
+    "mechanism": "Both drugs have serotonergic activity and tramadol lowers seizure threshold",
+    "recommendation": "Use with caution. Consider alternative analgesic. Watch for serotonin syndrome symptoms."
+  },
+  {
+    "drug1": "Ciprofloxacin",
+    "drug2": "Antacid",
+    "severity": "Moderate",
+    "effect": "Reduced ciprofloxacin absorption",
+    "mechanism": "Divalent cations (Mg, Al, Ca) chelate fluoroquinolones",
+    "recommendation": "Separate dosing by at least 2 hours. Give ciprofloxacin first."
+  },
+  {
+    "drug1": "Levothyroxine",
+    "drug2": "Calcium",
+    "severity": "Minor",
+    "effect": "Reduced levothyroxine absorption",
+    "mechanism": "Calcium binds levothyroxine in GI tract",
+    "recommendation": "Separate dosing by at least 4 hours. Take levothyroxine on empty stomach."
+  },
+  {
+    "drug1": "Levothyroxine",
+    "drug2": "Iron",
+    "severity": "Minor",
+    "effect": "Reduced levothyroxine absorption",
+    "mechanism": "Iron binds levothyroxine in GI tract",
+    "recommendation": "Separate dosing by at least 4 hours."
+  },
+  {
+    "drug1": "Metronidazole",
+    "drug2": "Alcohol",
+    "severity": "Moderate",
+    "effect": "Disulfiram-like reaction",
+    "mechanism": "Metronidazole inhibits aldehyde dehydrogenase",
+    "recommendation": "Avoid alcohol during treatment and for 3 days after completing course."
+  },
+  {
+    "drug1": "Allopurinol",
+    "drug2": "Azathioprine",
+    "severity": "Severe",
+    "effect": "Severe myelosuppression",
+    "mechanism": "Allopurinol inhibits xanthine oxidase, blocking azathioprine metabolism",
+    "recommendation": "Reduce azathioprine dose by 75%. Monitor CBC closely. Consider alternative."
+  },
+  {
+    "drug1": "Diltiazem",
+    "drug2": "Beta Blocker",
+    "severity": "Moderate",
+    "effect": "Bradycardia and heart block",
+    "mechanism": "Both drugs slow AV conduction",
+    "recommendation": "Use with caution. Monitor heart rate. Avoid if heart block present."
+  },
+  {
+    "drug1": "Amiodarone",
+    "drug2": "Warfarin",
+    "severity": "Severe",
+    "effect": "Increased INR and bleeding risk",
+    "mechanism": "Amiodarone inhibits CYP2C9 and has very long half-life",
+    "recommendation": "Reduce warfarin dose by 30-50%. Monitor INR weekly initially. Effect persists weeks after stopping."
+  },
+  {
+    "drug1": "Losartan",
+    "drug2": "Potassium",
+    "severity": "Moderate",
+    "effect": "Hyperkalemia",
+    "mechanism": "ARBs reduce aldosterone, causing potassium retention",
+    "recommendation": "Monitor potassium regularly. Avoid supplements unless deficient."
+  },
+  {
+    "drug1": "Quinolone",
+    "drug2": "Theophylline",
+    "severity": "Moderate",
+    "effect": "Theophylline toxicity",
+    "mechanism": "Some quinolones inhibit theophylline metabolism",
+    "recommendation": "Monitor theophylline levels. Levofloxacin and moxifloxacin have less interaction."
+  },
+  {
+    "drug1": "Rifampicin",
+    "drug2": "Warfarin",
+    "severity": "Severe",
+    "effect": "Dramatically reduced warfarin effect",
+    "mechanism": "Rifampicin is a potent CYP inducer, increasing warfarin metabolism",
+    "recommendation": "May need to double or triple warfarin dose. Monitor INR very closely."
+  },
+  {
+    "drug1": "Rifampicin",
+    "drug2": "Oral Contraceptive",
+    "severity": "Severe",
+    "effect": "Contraceptive failure",
+    "mechanism": "Rifampicin induces metabolism of hormones",
+    "recommendation": "Use alternative contraception during and for 4 weeks after rifampicin."
+  },
+  {
+    "drug1": "Ketoconazole",
+    "drug2": "Simvastatin",
+    "severity": "Contraindicated",
+    "effect": "Severe myopathy and rhabdomyolysis",
+    "mechanism": "Ketoconazole is a potent CYP3A4 inhibitor, dramatically increasing statin levels",
+    "recommendation": "Contraindicated. Hold statin during ketoconazole treatment."
+  },
+  {
+    "drug1": "Grapefruit",
+    "drug2": "Simvastatin",
+    "severity": "Moderate",
+    "effect": "Increased statin levels and myopathy risk",
+    "mechanism": "Grapefruit inhibits intestinal CYP3A4",
+    "recommendation": "Avoid grapefruit juice with simvastatin. Consider pravastatin or rosuvastatin."
+  },
+  {
+    "drug1": "Fluoxetine",
+    "drug2": "Tramadol",
+    "severity": "Moderate",
+    "effect": "Serotonin syndrome and seizure risk",
+    "mechanism": "Both have serotonergic effects; fluoxetine also inhibits tramadol metabolism",
+    "recommendation": "Use alternative analgesic. If essential, start low and monitor closely."
+  },
+  {
+    "drug1": "Aspirin",
+    "drug2": "Ibuprofen",
+    "severity": "Moderate",
+    "effect": "Reduced cardioprotective effect of aspirin",
+    "mechanism": "Ibuprofen blocks aspirin's access to platelet COX-1",
+    "recommendation": "Take aspirin 30 minutes before ibuprofen, or use paracetamol instead."
+  },
+  {
+    "drug1": "Sulfonylurea",
+    "drug2": "Fluconazole",
+    "severity": "Moderate",
+    "effect": "Hypoglycemia",
+    "mechanism": "Fluconazole inhibits sulfonylurea metabolism",
+    "recommendation": "Monitor blood glucose closely. May need to reduce sulfonylurea dose."
+  },
+  {
+    "drug1": "Insulin",
+    "drug2": "Beta Blocker",
+    "severity": "Minor",
+    "effect": "Masked hypoglycemia symptoms",
+    "mechanism": "Beta blockers block adrenergic symptoms of hypoglycemia",
+    "recommendation": "Use cardioselective beta blockers. Educate patient about hypoglycemia signs."
+  },
+  {
+    "drug1": "Atorvastatin",
+    "drug2": "Gemfibrozil",
+    "severity": "Severe",
+    "effect": "Myopathy and rhabdomyolysis",
+    "mechanism": "Gemfibrozil inhibits statin glucuronidation and increases muscle uptake",
+    "recommendation": "Avoid gemfibrozil with any statin. Use fenofibrate if fibrate needed."
+  },
+  {
+    "drug1": "Ceftriaxone",
+    "drug2": "Calcium",
+    "severity": "Severe",
+    "effect": "Fatal precipitation in neonates",
+    "mechanism": "Ceftriaxone-calcium precipitates can form in lungs and kidneys",
+    "recommendation": "Contraindicated in neonates. In adults, do not mix in same IV line."
+  },
+  {
+    "drug1": "Clonidine",
+    "drug2": "Beta Blocker",
+    "severity": "Moderate",
+    "effect": "Rebound hypertension if clonidine stopped",
+    "mechanism": "Beta blockers block vasodilation, worsening rebound",
+    "recommendation": "If stopping clonidine, taper slowly. Stop beta blocker first."
+  },
+  {
+    "drug1": "Tetracycline",
+    "drug2": "Antacid",
+    "severity": "Moderate",
+    "effect": "Reduced tetracycline absorption",
+    "mechanism": "Divalent cations chelate tetracyclines",
+    "recommendation": "Separate dosing by 2-3 hours."
+  },
+  {
+    "drug1": "Phenytoin",
+    "drug2": "Folate",
+    "severity": "Minor",
+    "effect": "Reduced phenytoin levels or folate deficiency",
+    "mechanism": "Complex bidirectional interaction",
+    "recommendation": "If supplementing folate, monitor phenytoin levels."
+  },
+  {
+    "drug1": "Prednisone",
+    "drug2": "NSAID",
+    "severity": "Moderate",
+    "effect": "Increased GI bleeding risk",
+    "mechanism": "Both damage gastric mucosa; additive effect",
+    "recommendation": "Add PPI for gastroprotection. Monitor for GI symptoms."
+  },
+  {
+    "drug1": "Telmisartan",
+    "drug2": "Potassium",
+    "severity": "Moderate",
+    "effect": "Hyperkalemia",
+    "mechanism": "ARBs cause potassium retention",
+    "recommendation": "Monitor potassium. Avoid supplements unless truly deficient."
+  },
+  {
+    "drug1": "Ramipril",
+    "drug2": "Potassium",
+    "severity": "Moderate",
+    "effect": "Hyperkalemia",
+    "mechanism": "ACE inhibitors cause potassium retention",
+    "recommendation": "Monitor potassium. Avoid supplements unless truly deficient."
+  }
+]

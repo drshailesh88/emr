@@ -5,14 +5,10 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime, date
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple
 from contextlib import contextmanager
 
-from ..models.schemas import (
-    Patient, Visit, Investigation, Procedure,
-    Doctor, Consultation, CareTeamMember, AuditLogEntry, PatientSnapshot,
-    Medication
-)
+from ..models.schemas import Patient, Visit, Investigation, Procedure, Vitals
 
 
 class DatabaseService:
@@ -54,7 +50,8 @@ class DatabaseService:
                     gender TEXT,
                     phone TEXT,
                     address TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_deleted INTEGER DEFAULT 0
                 )
             """)
 
@@ -69,6 +66,7 @@ class DatabaseService:
                     diagnosis TEXT,
                     prescription_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_deleted INTEGER DEFAULT 0,
                     FOREIGN KEY (patient_id) REFERENCES patients(id)
                 )
             """)
@@ -85,6 +83,7 @@ class DatabaseService:
                     test_date DATE,
                     is_abnormal BOOLEAN DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_deleted INTEGER DEFAULT 0,
                     FOREIGN KEY (patient_id) REFERENCES patients(id)
                 )
             """)
@@ -99,6 +98,191 @@ class DatabaseService:
                     procedure_date DATE,
                     notes TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_deleted INTEGER DEFAULT 0,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+
+            # Vitals table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS vitals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    visit_id INTEGER,
+                    recorded_at TEXT DEFAULT (datetime('now')),
+                    bp_systolic INTEGER,
+                    bp_diastolic INTEGER,
+                    pulse INTEGER,
+                    temperature REAL,
+                    spo2 INTEGER,
+                    respiratory_rate INTEGER,
+                    weight REAL,
+                    height REAL,
+                    bmi REAL,
+                    blood_sugar REAL,
+                    sugar_type TEXT CHECK (sugar_type IN ('FBS', 'RBS', 'PPBS')),
+                    notes TEXT,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id),
+                    FOREIGN KEY (visit_id) REFERENCES visits(id)
+                )
+            """)
+
+            # Audit log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+                    old_value TEXT,
+                    new_value TEXT,
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+
+            # Drugs table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS drugs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    generic_name TEXT NOT NULL,
+                    brand_names TEXT,
+                    strengths TEXT,
+                    forms TEXT,
+                    category TEXT,
+                    is_custom INTEGER DEFAULT 0,
+                    usage_count INTEGER DEFAULT 0,
+                    last_used TEXT
+                )
+            """)
+
+            # Templates table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS templates (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    category TEXT,
+                    prescription_json TEXT NOT NULL,
+                    is_custom INTEGER DEFAULT 0,
+                    is_favorite INTEGER DEFAULT 0,
+                    usage_count INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT
+                )
+            """)
+
+            # Phrases table for quick text expansion
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS phrases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    shortcut TEXT UNIQUE NOT NULL,
+                    expansion TEXT NOT NULL,
+                    category TEXT,
+                    is_custom INTEGER DEFAULT 0,
+                    usage_count INTEGER DEFAULT 0
+                )
+            """)
+
+            # Patient access log table (for recent patients)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS patient_access_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    accessed_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+
+            # Appointments table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS appointments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    appointment_date TEXT NOT NULL,
+                    appointment_time TEXT,
+                    duration_minutes INTEGER DEFAULT 15,
+                    appointment_type TEXT DEFAULT 'follow-up',
+                    status TEXT DEFAULT 'scheduled',
+                    notes TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    is_deleted INTEGER DEFAULT 0,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+
+            # Patient preferences table (for reminders, etc.)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS patient_preferences (
+                    patient_id INTEGER PRIMARY KEY,
+                    reminder_opted_out INTEGER DEFAULT 0,
+                    preferred_channel TEXT DEFAULT 'whatsapp',
+                    reminder_timing TEXT DEFAULT '1_day',
+                    clinical_reminders INTEGER DEFAULT 1,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+
+            # Reminder log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS reminder_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    reminder_type TEXT NOT NULL,
+                    reference_id INTEGER,
+                    channel TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    message TEXT,
+                    sent_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (patient_id) REFERENCES patients(id)
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_reminder_patient ON reminder_log(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_reminder_date ON reminder_log(sent_at)")
+
+            # Drug interactions table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS drug_interactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    drug1_generic TEXT NOT NULL,
+                    drug2_generic TEXT NOT NULL,
+                    severity TEXT CHECK (severity IN ('Minor', 'Moderate', 'Severe', 'Contraindicated')),
+                    effect TEXT,
+                    mechanism TEXT,
+                    recommendation TEXT,
+                    UNIQUE(drug1_generic, drug2_generic)
+                )
+            """)
+
+            # Interaction overrides table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS interaction_overrides (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER,
+                    visit_id INTEGER,
+                    drug1 TEXT,
+                    drug2 TEXT,
+                    severity TEXT,
+                    reason TEXT NOT NULL,
+                    overridden_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (patient_id) REFERENCES patients(id),
+                    FOREIGN KEY (visit_id) REFERENCES visits(id)
+                )
+            """)
+
+            # Clinical alerts table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    alert_type TEXT NOT NULL,
+                    severity TEXT CHECK (severity IN ('info', 'warning', 'critical')),
+                    title TEXT NOT NULL,
+                    message TEXT,
+                    triggered_at TEXT DEFAULT (datetime('now')),
+                    acknowledged_at TEXT,
+                    acknowledged_action TEXT,
+                    snoozed_until TEXT,
+                    is_resolved INTEGER DEFAULT 0,
                     FOREIGN KEY (patient_id) REFERENCES patients(id)
                 )
             """)
@@ -108,292 +292,147 @@ class DatabaseService:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_investigations_patient ON investigations(patient_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_procedures_patient ON procedures(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_vitals_patient ON vitals(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_vitals_date ON vitals(recorded_at DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_table_record ON audit_log(table_name, record_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_drugs_generic ON drugs(generic_name)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_drugs_usage ON drugs(usage_count DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_templates_favorite ON templates(is_favorite)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_phrases_shortcut ON phrases(shortcut)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_access_patient ON patient_access_log(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_access_time ON patient_access_log(accessed_at DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_date ON appointments(appointment_date)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_patient ON appointments(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appt_status ON appointments(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_interactions_drug1 ON drug_interactions(drug1_generic)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_interactions_drug2 ON drug_interactions(drug2_generic)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(is_resolved, snoozed_until)")
 
-            # ============== NEW TABLES FOR HOSPITAL FEATURES ==============
+            # Add is_deleted column to existing tables if not exists
+            self._add_column_if_not_exists(cursor, "patients", "is_deleted", "INTEGER DEFAULT 0")
+            self._add_column_if_not_exists(cursor, "visits", "is_deleted", "INTEGER DEFAULT 0")
+            self._add_column_if_not_exists(cursor, "investigations", "is_deleted", "INTEGER DEFAULT 0")
+            self._add_column_if_not_exists(cursor, "procedures", "is_deleted", "INTEGER DEFAULT 0")
 
-            # Doctors/Staff table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS doctors (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    specialty TEXT,
-                    department TEXT,
-                    employee_id TEXT UNIQUE,
-                    designation TEXT,
-                    phone TEXT,
-                    email TEXT,
-                    is_active BOOLEAN DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+            # Add is_favorite column to patients table if not exists
+            self._add_column_if_not_exists(cursor, "patients", "is_favorite", "INTEGER DEFAULT 0")
 
-            # Consultations table (inter-department referrals)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS consultations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    patient_id INTEGER NOT NULL,
-                    requesting_doctor_id INTEGER,
-                    consulting_doctor_id INTEGER,
-                    consulting_specialty TEXT NOT NULL,
-                    consult_date DATE NOT NULL,
-                    reason_for_referral TEXT,
-                    clinical_question TEXT,
-                    findings TEXT,
-                    impression TEXT,
-                    recommendations TEXT,
-                    follow_up_needed BOOLEAN DEFAULT 0,
-                    follow_up_date DATE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (patient_id) REFERENCES patients(id),
-                    FOREIGN KEY (requesting_doctor_id) REFERENCES doctors(id),
-                    FOREIGN KEY (consulting_doctor_id) REFERENCES doctors(id)
-                )
-            """)
+            # Initialize default phrases if table is empty
+            self._init_default_phrases(cursor)
 
-            # Care team table (who is involved in patient's care)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS care_team (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    patient_id INTEGER NOT NULL,
-                    doctor_id INTEGER NOT NULL,
-                    role TEXT NOT NULL,
-                    specialty TEXT,
-                    start_date DATE NOT NULL,
-                    end_date DATE,
-                    added_by INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (patient_id) REFERENCES patients(id),
-                    FOREIGN KEY (doctor_id) REFERENCES doctors(id),
-                    UNIQUE(patient_id, doctor_id, role)
-                )
-            """)
-
-            # Audit log table (compliance requirement)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS audit_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    user_id INTEGER NOT NULL,
-                    user_name TEXT NOT NULL,
-                    user_role TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    resource_type TEXT NOT NULL,
-                    resource_id INTEGER,
-                    patient_id INTEGER,
-                    details TEXT,
-                    ip_address TEXT,
-                    workstation_id TEXT
-                )
-            """)
-
-            # Patient snapshot table (pre-computed summaries)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS patient_snapshots (
-                    patient_id INTEGER PRIMARY KEY,
-                    uhid TEXT,
-                    demographics TEXT,
-                    active_problems_json TEXT,
-                    current_medications_json TEXT,
-                    allergies_json TEXT,
-                    key_labs_json TEXT,
-                    vitals_json TEXT,
-                    blood_group TEXT,
-                    code_status TEXT DEFAULT 'FULL',
-                    on_anticoagulation BOOLEAN DEFAULT 0,
-                    anticoag_drug TEXT,
-                    last_visit_date DATE,
-                    major_events_json TEXT,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (patient_id) REFERENCES patients(id)
-                )
-            """)
-
-            # Patient allergies table (critical safety data)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS patient_allergies (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    patient_id INTEGER NOT NULL,
-                    allergen TEXT NOT NULL,
-                    reaction TEXT,
-                    severity TEXT,
-                    verified BOOLEAN DEFAULT 0,
-                    verified_by INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (patient_id) REFERENCES patients(id),
-                    UNIQUE(patient_id, allergen)
-                )
-            """)
-
-            # Add phonetic column to patients for fuzzy search
-            cursor.execute("""
-                ALTER TABLE patients ADD COLUMN name_phonetic TEXT
-            """) if not self._column_exists(cursor, 'patients', 'name_phonetic') else None
-
-            # Add doctor_id to visits for authorship tracking
-            cursor.execute("""
-                ALTER TABLE visits ADD COLUMN doctor_id INTEGER REFERENCES doctors(id)
-            """) if not self._column_exists(cursor, 'visits', 'doctor_id') else None
-
-            # Add note_type to visits
-            cursor.execute("""
-                ALTER TABLE visits ADD COLUMN note_type TEXT DEFAULT 'progress'
-            """) if not self._column_exists(cursor, 'visits', 'note_type') else None
-
-            # Additional indexes
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_doctors_specialty ON doctors(specialty)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultations_patient ON consultations(patient_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultations_specialty ON consultations(consulting_specialty)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_care_team_patient ON care_team(patient_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id, timestamp)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_patient ON audit_log(patient_id, timestamp)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_patients_phonetic ON patients(name_phonetic)")
-
-            # ============== FTS5 FULL-TEXT SEARCH ==============
-            self._init_fts(cursor)
-
-    def _column_exists(self, cursor, table: str, column: str) -> bool:
-        """Check if a column exists in a table."""
-        cursor.execute(f"PRAGMA table_info({table})")
-        columns = [row[1] for row in cursor.fetchall()]
-        return column in columns
-
-    def _init_fts(self, cursor):
-        """Initialize FTS5 full-text search tables."""
-        # FTS5 for patient name/address search
-        cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS patients_fts USING fts5(
-                name, address, content='patients', content_rowid='id',
-                tokenize='porter unicode61'
-            )
-        """)
-
-        # FTS5 for clinical content search
-        cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS clinical_fts USING fts5(
-                patient_id UNINDEXED,
-                content,
-                doc_type,
-                doc_date UNINDEXED,
-                source_id UNINDEXED,
-                tokenize='porter unicode61'
-            )
-        """)
-
-        # Triggers to keep patients_fts in sync
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS patients_fts_insert AFTER INSERT ON patients
-            BEGIN
-                INSERT INTO patients_fts(rowid, name, address)
-                VALUES (NEW.id, NEW.name, COALESCE(NEW.address, ''));
-            END
-        """)
-
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS patients_fts_update AFTER UPDATE ON patients
-            BEGIN
-                UPDATE patients_fts SET name = NEW.name, address = COALESCE(NEW.address, '')
-                WHERE rowid = NEW.id;
-            END
-        """)
-
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS patients_fts_delete AFTER DELETE ON patients
-            BEGIN
-                DELETE FROM patients_fts WHERE rowid = OLD.id;
-            END
-        """)
-
-        # Triggers to keep clinical_fts in sync with visits
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS visits_fts_insert AFTER INSERT ON visits
-            BEGIN
-                INSERT INTO clinical_fts(patient_id, content, doc_type, doc_date, source_id)
-                VALUES (
-                    NEW.patient_id,
-                    COALESCE(NEW.chief_complaint, '') || ' ' ||
-                    COALESCE(NEW.clinical_notes, '') || ' ' ||
-                    COALESCE(NEW.diagnosis, ''),
-                    'visit',
-                    NEW.visit_date,
-                    NEW.id
-                );
-            END
-        """)
-
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS visits_fts_update AFTER UPDATE ON visits
-            BEGIN
-                DELETE FROM clinical_fts WHERE doc_type = 'visit' AND source_id = OLD.id;
-                INSERT INTO clinical_fts(patient_id, content, doc_type, doc_date, source_id)
-                VALUES (
-                    NEW.patient_id,
-                    COALESCE(NEW.chief_complaint, '') || ' ' ||
-                    COALESCE(NEW.clinical_notes, '') || ' ' ||
-                    COALESCE(NEW.diagnosis, ''),
-                    'visit',
-                    NEW.visit_date,
-                    NEW.id
-                );
-            END
-        """)
-
-        # Triggers for investigations
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS investigations_fts_insert AFTER INSERT ON investigations
-            BEGIN
-                INSERT INTO clinical_fts(patient_id, content, doc_type, doc_date, source_id)
-                VALUES (
-                    NEW.patient_id,
-                    NEW.test_name || ' ' || COALESCE(NEW.result, '') || ' ' || COALESCE(NEW.unit, ''),
-                    'investigation',
-                    NEW.test_date,
-                    NEW.id
-                );
-            END
-        """)
-
-        # Triggers for procedures
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS procedures_fts_insert AFTER INSERT ON procedures
-            BEGIN
-                INSERT INTO clinical_fts(patient_id, content, doc_type, doc_date, source_id)
-                VALUES (
-                    NEW.patient_id,
-                    NEW.procedure_name || ' ' || COALESCE(NEW.details, '') || ' ' || COALESCE(NEW.notes, ''),
-                    'procedure',
-                    NEW.procedure_date,
-                    NEW.id
-                );
-            END
-        """)
-
-        # Triggers for consultations
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS consultations_fts_insert AFTER INSERT ON consultations
-            BEGIN
-                INSERT INTO clinical_fts(patient_id, content, doc_type, doc_date, source_id)
-                VALUES (
-                    NEW.patient_id,
-                    NEW.consulting_specialty || ' ' ||
-                    COALESCE(NEW.reason_for_referral, '') || ' ' ||
-                    COALESCE(NEW.findings, '') || ' ' ||
-                    COALESCE(NEW.impression, '') || ' ' ||
-                    COALESCE(NEW.recommendations, ''),
-                    'consultation',
-                    NEW.consult_date,
-                    NEW.id
-                );
-            END
-        """)
+    def _add_column_if_not_exists(self, cursor, table_name: str, column_name: str, column_def: str):
+        """Add column to table if it doesn't exist."""
+        try:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
 
     def _generate_uhid(self) -> str:
         """Generate unique hospital ID."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM patients")
+            cursor.execute("SELECT COUNT(*) FROM patients WHERE is_deleted = 0")
             count = cursor.fetchone()[0]
             year = datetime.now().year
             return f"EMR-{year}-{count + 1:04d}"
+
+    # ============== AUDIT LOG OPERATIONS ==============
+
+    def log_audit(self, table_name: str, record_id: int, operation: str,
+                  old_value: dict = None, new_value: dict = None):
+        """Log an audit entry."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            old_json = json.dumps(old_value) if old_value else None
+            new_json = json.dumps(new_value) if new_value else None
+
+            cursor.execute("""
+                INSERT INTO audit_log (table_name, record_id, operation, old_value, new_value)
+                VALUES (?, ?, ?, ?, ?)
+            """, (table_name, record_id, operation, old_json, new_json))
+
+    def get_audit_history(self, table_name: str = None, record_id: int = None,
+                          limit: int = 100) -> list[dict]:
+        """Get audit history, optionally filtered by table/record."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            query = "SELECT * FROM audit_log WHERE 1=1"
+            params = []
+
+            if table_name:
+                query += " AND table_name = ?"
+                params.append(table_name)
+
+            if record_id is not None:
+                query += " AND record_id = ?"
+                params.append(record_id)
+
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
+
+            results = []
+            for row in cursor.fetchall():
+                entry = dict(row)
+                # Parse JSON values
+                if entry.get('old_value'):
+                    try:
+                        entry['old_value'] = json.loads(entry['old_value'])
+                    except:
+                        pass
+                if entry.get('new_value'):
+                    try:
+                        entry['new_value'] = json.loads(entry['new_value'])
+                    except:
+                        pass
+                results.append(entry)
+
+            return results
+
+    def get_patient_audit_history(self, patient_id: int) -> list[dict]:
+        """Get all audit entries related to a patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get all records related to this patient
+            audit_entries = []
+
+            # Patient record changes
+            patient_audits = self.get_audit_history(table_name="patients", record_id=patient_id, limit=1000)
+            audit_entries.extend(patient_audits)
+
+            # Visit changes
+            cursor.execute("SELECT id FROM visits WHERE patient_id = ?", (patient_id,))
+            visit_ids = [row[0] for row in cursor.fetchall()]
+            for visit_id in visit_ids:
+                visit_audits = self.get_audit_history(table_name="visits", record_id=visit_id, limit=1000)
+                audit_entries.extend(visit_audits)
+
+            # Investigation changes
+            cursor.execute("SELECT id FROM investigations WHERE patient_id = ?", (patient_id,))
+            inv_ids = [row[0] for row in cursor.fetchall()]
+            for inv_id in inv_ids:
+                inv_audits = self.get_audit_history(table_name="investigations", record_id=inv_id, limit=1000)
+                audit_entries.extend(inv_audits)
+
+            # Procedure changes
+            cursor.execute("SELECT id FROM procedures WHERE patient_id = ?", (patient_id,))
+            proc_ids = [row[0] for row in cursor.fetchall()]
+            for proc_id in proc_ids:
+                proc_audits = self.get_audit_history(table_name="procedures", record_id=proc_id, limit=1000)
+                audit_entries.extend(proc_audits)
+
+            # Sort by timestamp descending
+            audit_entries.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+
+            return audit_entries
 
     # ============== PATIENT OPERATIONS ==============
 
@@ -409,13 +448,29 @@ class DatabaseService:
                   patient.phone, patient.address))
             patient.id = cursor.lastrowid
             patient.uhid = uhid
+
+            # Log audit
+            self.log_audit(
+                table_name="patients",
+                record_id=patient.id,
+                operation="INSERT",
+                new_value={
+                    "uhid": uhid,
+                    "name": patient.name,
+                    "age": patient.age,
+                    "gender": patient.gender,
+                    "phone": patient.phone,
+                    "address": patient.address
+                }
+            )
+
             return patient
 
     def get_patient(self, patient_id: int) -> Optional[Patient]:
         """Get patient by ID."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM patients WHERE id = ?", (patient_id,))
+            cursor.execute("SELECT * FROM patients WHERE id = ? AND is_deleted = 0", (patient_id,))
             row = cursor.fetchone()
             if row:
                 return Patient(**dict(row))
@@ -425,7 +480,7 @@ class DatabaseService:
         """Get all patients."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM patients ORDER BY name")
+            cursor.execute("SELECT * FROM patients WHERE is_deleted = 0 ORDER BY name")
             return [Patient(**dict(row)) for row in cursor.fetchall()]
 
     def search_patients_basic(self, query: str) -> List[Patient]:
@@ -435,7 +490,8 @@ class DatabaseService:
             search_term = f"%{query}%"
             cursor.execute("""
                 SELECT * FROM patients
-                WHERE name LIKE ? OR uhid LIKE ?
+                WHERE (name LIKE ? OR uhid LIKE ?)
+                AND is_deleted = 0
                 ORDER BY name
             """, (search_term, search_term))
             return [Patient(**dict(row)) for row in cursor.fetchall()]
@@ -444,13 +500,170 @@ class DatabaseService:
         """Update patient details."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+
+            # Get old values for audit log
+            cursor.execute("SELECT * FROM patients WHERE id = ?", (patient.id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Update patient
             cursor.execute("""
                 UPDATE patients
                 SET name = ?, age = ?, gender = ?, phone = ?, address = ?
                 WHERE id = ?
             """, (patient.name, patient.age, patient.gender,
                   patient.phone, patient.address, patient.id))
-            return cursor.rowcount > 0
+
+            if cursor.rowcount > 0:
+                # Log only changed fields
+                new_data = {
+                    "name": patient.name,
+                    "age": patient.age,
+                    "gender": patient.gender,
+                    "phone": patient.phone,
+                    "address": patient.address
+                }
+
+                changed_fields_old = {}
+                changed_fields_new = {}
+
+                for key in new_data:
+                    if old_data.get(key) != new_data[key]:
+                        changed_fields_old[key] = old_data.get(key)
+                        changed_fields_new[key] = new_data[key]
+
+                if changed_fields_old:  # Only log if something actually changed
+                    self.log_audit(
+                        table_name="patients",
+                        record_id=patient.id,
+                        operation="UPDATE",
+                        old_value=changed_fields_old,
+                        new_value=changed_fields_new
+                    )
+
+                return True
+
+            return False
+
+    def delete_patient(self, patient_id: int) -> bool:
+        """Soft delete a patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get patient data for audit
+            cursor.execute("SELECT * FROM patients WHERE id = ?", (patient_id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Soft delete
+            cursor.execute("UPDATE patients SET is_deleted = 1 WHERE id = ?", (patient_id,))
+
+            if cursor.rowcount > 0:
+                self.log_audit(
+                    table_name="patients",
+                    record_id=patient_id,
+                    operation="DELETE",
+                    old_value={
+                        "uhid": old_data.get("uhid"),
+                        "name": old_data.get("name"),
+                        "age": old_data.get("age"),
+                        "gender": old_data.get("gender")
+                    }
+                )
+                return True
+
+            return False
+
+    # ============== PATIENT ACCESS & FAVORITES ==============
+
+    def log_patient_access(self, patient_id: int):
+        """Log when a patient is accessed."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO patient_access_log (patient_id)
+                VALUES (?)
+            """, (patient_id,))
+
+            # Keep only last 100 accesses per patient to prevent bloat
+            cursor.execute("""
+                DELETE FROM patient_access_log
+                WHERE patient_id = ?
+                AND id NOT IN (
+                    SELECT id FROM patient_access_log
+                    WHERE patient_id = ?
+                    ORDER BY accessed_at DESC
+                    LIMIT 100
+                )
+            """, (patient_id, patient_id))
+
+    def get_recent_patients(self, limit: int = 10) -> list[dict]:
+        """Get recently accessed patients (distinct, ordered by last access)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT DISTINCT p.*, MAX(pal.accessed_at) as last_accessed
+                FROM patients p
+                INNER JOIN patient_access_log pal ON p.id = pal.patient_id
+                WHERE p.is_deleted = 0
+                GROUP BY p.id
+                ORDER BY last_accessed DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_favorite_patients(self) -> list[dict]:
+        """Get favorite patients."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM patients
+                WHERE is_favorite = 1 AND is_deleted = 0
+                ORDER BY name
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def toggle_patient_favorite(self, patient_id: int) -> bool:
+        """Toggle favorite status, return new status."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get current status
+            cursor.execute("SELECT is_favorite FROM patients WHERE id = ?", (patient_id,))
+            row = cursor.fetchone()
+            if not row:
+                return False
+
+            new_status = 0 if row[0] else 1
+            cursor.execute("UPDATE patients SET is_favorite = ? WHERE id = ?", (new_status, patient_id))
+
+            return bool(new_status)
+
+    def get_todays_patients(self) -> list[dict]:
+        """Get patients with visits today."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            today = date.today()
+            cursor.execute("""
+                SELECT DISTINCT p.*
+                FROM patients p
+                INNER JOIN visits v ON p.id = v.patient_id
+                WHERE v.visit_date = ? AND p.is_deleted = 0 AND v.is_deleted = 0
+                ORDER BY v.created_at DESC
+            """, (today,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def clear_recent_patients(self):
+        """Clear the recent patients access log."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM patient_access_log")
 
     # ============== VISIT OPERATIONS ==============
 
@@ -466,6 +679,20 @@ class DatabaseService:
             """, (visit.patient_id, visit_date, visit.chief_complaint,
                   visit.clinical_notes, visit.diagnosis, visit.prescription_json))
             visit.id = cursor.lastrowid
+
+            # Log audit
+            self.log_audit(
+                table_name="visits",
+                record_id=visit.id,
+                operation="INSERT",
+                new_value={
+                    "patient_id": visit.patient_id,
+                    "visit_date": str(visit_date),
+                    "chief_complaint": visit.chief_complaint,
+                    "diagnosis": visit.diagnosis
+                }
+            )
+
             return visit
 
     def get_patient_visits(self, patient_id: int) -> List[Visit]:
@@ -473,15 +700,37 @@ class DatabaseService:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM visits WHERE patient_id = ?
+                SELECT * FROM visits
+                WHERE patient_id = ? AND is_deleted = 0
                 ORDER BY visit_date DESC, created_at DESC
             """, (patient_id,))
             return [Visit(**dict(row)) for row in cursor.fetchall()]
+
+
+    def get_visit(self, visit_id: int) -> Optional[Visit]:
+        """Get visit by ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM visits WHERE id = ? AND is_deleted = 0", (visit_id,))
+            row = cursor.fetchone()
+            if row:
+                return Visit(**dict(row))
+            return None
 
     def update_visit(self, visit: Visit) -> bool:
         """Update a visit."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+
+            # Get old values for audit log
+            cursor.execute("SELECT * FROM visits WHERE id = ?", (visit.id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Update visit
             cursor.execute("""
                 UPDATE visits
                 SET chief_complaint = ?, clinical_notes = ?,
@@ -489,7 +738,67 @@ class DatabaseService:
                 WHERE id = ?
             """, (visit.chief_complaint, visit.clinical_notes,
                   visit.diagnosis, visit.prescription_json, visit.id))
-            return cursor.rowcount > 0
+
+            if cursor.rowcount > 0:
+                # Log only changed fields
+                new_data = {
+                    "chief_complaint": visit.chief_complaint,
+                    "clinical_notes": visit.clinical_notes,
+                    "diagnosis": visit.diagnosis,
+                    "prescription_json": visit.prescription_json
+                }
+
+                changed_fields_old = {}
+                changed_fields_new = {}
+
+                for key in new_data:
+                    if old_data.get(key) != new_data[key]:
+                        changed_fields_old[key] = old_data.get(key)
+                        changed_fields_new[key] = new_data[key]
+
+                if changed_fields_old:
+                    self.log_audit(
+                        table_name="visits",
+                        record_id=visit.id,
+                        operation="UPDATE",
+                        old_value=changed_fields_old,
+                        new_value=changed_fields_new
+                    )
+
+                return True
+
+            return False
+
+    def delete_visit(self, visit_id: int) -> bool:
+        """Soft delete a visit."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get visit data for audit
+            cursor.execute("SELECT * FROM visits WHERE id = ?", (visit_id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Soft delete
+            cursor.execute("UPDATE visits SET is_deleted = 1 WHERE id = ?", (visit_id,))
+
+            if cursor.rowcount > 0:
+                self.log_audit(
+                    table_name="visits",
+                    record_id=visit_id,
+                    operation="DELETE",
+                    old_value={
+                        "visit_date": old_data.get("visit_date"),
+                        "chief_complaint": old_data.get("chief_complaint"),
+                        "diagnosis": old_data.get("diagnosis")
+                    }
+                )
+                return True
+
+            return False
 
     # ============== INVESTIGATION OPERATIONS ==============
 
@@ -507,6 +816,21 @@ class DatabaseService:
                   investigation.reference_range, test_date,
                   investigation.is_abnormal))
             investigation.id = cursor.lastrowid
+
+            # Log audit
+            self.log_audit(
+                table_name="investigations",
+                record_id=investigation.id,
+                operation="INSERT",
+                new_value={
+                    "patient_id": investigation.patient_id,
+                    "test_name": investigation.test_name,
+                    "result": investigation.result,
+                    "test_date": str(test_date),
+                    "is_abnormal": investigation.is_abnormal
+                }
+            )
+
             return investigation
 
     def get_patient_investigations(self, patient_id: int) -> List[Investigation]:
@@ -514,10 +838,111 @@ class DatabaseService:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM investigations WHERE patient_id = ?
+                SELECT * FROM investigations
+                WHERE patient_id = ? AND is_deleted = 0
                 ORDER BY test_date DESC
             """, (patient_id,))
             return [Investigation(**dict(row)) for row in cursor.fetchall()]
+
+
+    def get_investigation(self, investigation_id: int) -> Optional[Investigation]:
+        """Get investigation by ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM investigations WHERE id = ? AND is_deleted = 0", (investigation_id,))
+            row = cursor.fetchone()
+            if row:
+                return Investigation(**dict(row))
+            return None
+
+    def update_investigation(self, investigation: Investigation) -> bool:
+        """Update an investigation."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get old values for audit log
+            cursor.execute("SELECT * FROM investigations WHERE id = ?", (investigation.id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Update investigation
+            cursor.execute("""
+                UPDATE investigations
+                SET test_name = ?, result = ?, unit = ?,
+                    reference_range = ?, test_date = ?, is_abnormal = ?
+                WHERE id = ?
+            """, (investigation.test_name, investigation.result, investigation.unit,
+                  investigation.reference_range, investigation.test_date,
+                  investigation.is_abnormal, investigation.id))
+
+            if cursor.rowcount > 0:
+                # Log only changed fields
+                new_data = {
+                    "test_name": investigation.test_name,
+                    "result": investigation.result,
+                    "unit": investigation.unit,
+                    "reference_range": investigation.reference_range,
+                    "test_date": str(investigation.test_date) if investigation.test_date else None,
+                    "is_abnormal": investigation.is_abnormal
+                }
+
+                changed_fields_old = {}
+                changed_fields_new = {}
+
+                for key in new_data:
+                    old_val = old_data.get(key)
+                    if key == "test_date" and old_val:
+                        old_val = str(old_val)
+                    if old_val != new_data[key]:
+                        changed_fields_old[key] = old_val
+                        changed_fields_new[key] = new_data[key]
+
+                if changed_fields_old:
+                    self.log_audit(
+                        table_name="investigations",
+                        record_id=investigation.id,
+                        operation="UPDATE",
+                        old_value=changed_fields_old,
+                        new_value=changed_fields_new
+                    )
+
+                return True
+
+            return False
+
+    def delete_investigation(self, investigation_id: int) -> bool:
+        """Soft delete an investigation."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get investigation data for audit
+            cursor.execute("SELECT * FROM investigations WHERE id = ?", (investigation_id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Soft delete
+            cursor.execute("UPDATE investigations SET is_deleted = 1 WHERE id = ?", (investigation_id,))
+
+            if cursor.rowcount > 0:
+                self.log_audit(
+                    table_name="investigations",
+                    record_id=investigation_id,
+                    operation="DELETE",
+                    old_value={
+                        "test_name": old_data.get("test_name"),
+                        "result": old_data.get("result"),
+                        "test_date": old_data.get("test_date")
+                    }
+                )
+                return True
+
+            return False
 
     # ============== PROCEDURE OPERATIONS ==============
 
@@ -533,6 +958,20 @@ class DatabaseService:
             """, (procedure.patient_id, procedure.procedure_name,
                   procedure.details, procedure_date, procedure.notes))
             procedure.id = cursor.lastrowid
+
+            # Log audit
+            self.log_audit(
+                table_name="procedures",
+                record_id=procedure.id,
+                operation="INSERT",
+                new_value={
+                    "patient_id": procedure.patient_id,
+                    "procedure_name": procedure.procedure_name,
+                    "procedure_date": str(procedure_date),
+                    "details": procedure.details
+                }
+            )
+
             return procedure
 
     def get_patient_procedures(self, patient_id: int) -> List[Procedure]:
@@ -540,10 +979,108 @@ class DatabaseService:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM procedures WHERE patient_id = ?
+                SELECT * FROM procedures
+                WHERE patient_id = ? AND is_deleted = 0
                 ORDER BY procedure_date DESC
             """, (patient_id,))
             return [Procedure(**dict(row)) for row in cursor.fetchall()]
+
+
+    def get_procedure(self, procedure_id: int) -> Optional[Procedure]:
+        """Get procedure by ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM procedures WHERE id = ? AND is_deleted = 0", (procedure_id,))
+            row = cursor.fetchone()
+            if row:
+                return Procedure(**dict(row))
+            return None
+
+    def update_procedure(self, procedure: Procedure) -> bool:
+        """Update a procedure."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get old values for audit log
+            cursor.execute("SELECT * FROM procedures WHERE id = ?", (procedure.id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Update procedure
+            cursor.execute("""
+                UPDATE procedures
+                SET procedure_name = ?, details = ?,
+                    procedure_date = ?, notes = ?
+                WHERE id = ?
+            """, (procedure.procedure_name, procedure.details,
+                  procedure.procedure_date, procedure.notes, procedure.id))
+
+            if cursor.rowcount > 0:
+                # Log only changed fields
+                new_data = {
+                    "procedure_name": procedure.procedure_name,
+                    "details": procedure.details,
+                    "procedure_date": str(procedure.procedure_date) if procedure.procedure_date else None,
+                    "notes": procedure.notes
+                }
+
+                changed_fields_old = {}
+                changed_fields_new = {}
+
+                for key in new_data:
+                    old_val = old_data.get(key)
+                    if key == "procedure_date" and old_val:
+                        old_val = str(old_val)
+                    if old_val != new_data[key]:
+                        changed_fields_old[key] = old_val
+                        changed_fields_new[key] = new_data[key]
+
+                if changed_fields_old:
+                    self.log_audit(
+                        table_name="procedures",
+                        record_id=procedure.id,
+                        operation="UPDATE",
+                        old_value=changed_fields_old,
+                        new_value=changed_fields_new
+                    )
+
+                return True
+
+            return False
+
+    def delete_procedure(self, procedure_id: int) -> bool:
+        """Soft delete a procedure."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get procedure data for audit
+            cursor.execute("SELECT * FROM procedures WHERE id = ?", (procedure_id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                return False
+
+            old_data = dict(old_row)
+
+            # Soft delete
+            cursor.execute("UPDATE procedures SET is_deleted = 1 WHERE id = ?", (procedure_id,))
+
+            if cursor.rowcount > 0:
+                self.log_audit(
+                    table_name="procedures",
+                    record_id=procedure_id,
+                    operation="DELETE",
+                    old_value={
+                        "procedure_name": old_data.get("procedure_name"),
+                        "procedure_date": old_data.get("procedure_date"),
+                        "details": old_data.get("details")
+                    }
+                )
+                return True
+
+            return False
 
     # ============== RAG HELPER METHODS ==============
 
@@ -648,499 +1185,855 @@ class DatabaseService:
 
         return documents
 
-    # ============== FTS5 SEARCH OPERATIONS ==============
+    # ============== TEMPLATE OPERATIONS ==============
 
-    def fts_search_patients(self, query: str, limit: int = 20) -> List[Patient]:
-        """Full-text search on patient names and addresses."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            # Escape special FTS characters
-            safe_query = query.replace('"', '""')
-            cursor.execute("""
-                SELECT p.* FROM patients p
-                JOIN patients_fts fts ON p.id = fts.rowid
-                WHERE patients_fts MATCH ?
-                ORDER BY bm25(patients_fts)
-                LIMIT ?
-            """, (f'"{safe_query}"*', limit))
-            return [Patient(**dict(row)) for row in cursor.fetchall()]
-
-    def fts_search_clinical(
-        self,
-        query: str,
-        patient_id: Optional[int] = None,
-        doc_type: Optional[str] = None,
-        limit: int = 20
-    ) -> List[Dict[str, Any]]:
-        """Full-text search on clinical content."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            safe_query = query.replace('"', '""')
-
-            sql = """
-                SELECT patient_id, content, doc_type, doc_date, source_id,
-                       bm25(clinical_fts) as relevance
-                FROM clinical_fts
-                WHERE clinical_fts MATCH ?
-            """
-            params = [f'"{safe_query}"*']
-
-            if patient_id:
-                sql += " AND patient_id = ?"
-                params.append(patient_id)
-
-            if doc_type:
-                sql += " AND doc_type = ?"
-                params.append(doc_type)
-
-            sql += " ORDER BY relevance LIMIT ?"
-            params.append(limit)
-
-            cursor.execute(sql, params)
-            return [dict(row) for row in cursor.fetchall()]
-
-    # ============== DOCTOR OPERATIONS ==============
-
-    def add_doctor(self, doctor: Doctor) -> Doctor:
-        """Add a new doctor."""
+    def get_all_templates(self) -> list[dict]:
+        """Get all templates grouped by category."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO doctors (name, specialty, department, employee_id,
-                                    designation, phone, email, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (doctor.name, doctor.specialty, doctor.department,
-                  doctor.employee_id, doctor.designation, doctor.phone,
-                  doctor.email, doctor.is_active))
-            doctor.id = cursor.lastrowid
-            return doctor
+                SELECT * FROM templates
+                ORDER BY is_favorite DESC, category, usage_count DESC, name
+            """)
 
-    def get_doctor(self, doctor_id: int) -> Optional[Doctor]:
-        """Get doctor by ID."""
+            templates = []
+            for row in cursor.fetchall():
+                template = dict(row)
+                # Parse prescription JSON
+                try:
+                    template['prescription'] = json.loads(template['prescription_json'])
+                except json.JSONDecodeError:
+                    template['prescription'] = {}
+                templates.append(template)
+
+            return templates
+
+    def get_template(self, template_id: str) -> Optional[dict]:
+        """Get template by ID."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,))
+            cursor.execute("SELECT * FROM templates WHERE id = ?", (template_id,))
             row = cursor.fetchone()
+
             if row:
-                return Doctor(**dict(row))
+                template = dict(row)
+                try:
+                    template['prescription'] = json.loads(template['prescription_json'])
+                except json.JSONDecodeError:
+                    template['prescription'] = {}
+                return template
             return None
 
-    def get_doctors_by_specialty(self, specialty: str) -> List[Doctor]:
-        """Get all doctors of a specialty."""
+    def add_custom_template(self, name: str, category: str, prescription: dict) -> str:
+        """Create custom template from prescription."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Generate unique ID
+            import uuid
+            template_id = f"custom-{uuid.uuid4().hex[:8]}"
+
+            prescription_json = json.dumps(prescription)
+
+            cursor.execute("""
+                INSERT INTO templates (id, name, category, prescription_json, is_custom)
+                VALUES (?, ?, ?, ?, 1)
+            """, (template_id, name, category, prescription_json))
+
+            return template_id
+
+    def update_template(self, template_id: str, name: str, category: str, prescription: dict) -> bool:
+        """Update an existing template."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            prescription_json = json.dumps(prescription)
+
+            cursor.execute("""
+                UPDATE templates
+                SET name = ?, category = ?, prescription_json = ?, updated_at = datetime('now')
+                WHERE id = ? AND is_custom = 1
+            """, (name, category, prescription_json, template_id))
+
+            return cursor.rowcount > 0
+
+    def delete_template(self, template_id: str) -> bool:
+        """Delete a custom template."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM templates WHERE id = ? AND is_custom = 1", (template_id,))
+            return cursor.rowcount > 0
+
+    def toggle_template_favorite(self, template_id: str) -> bool:
+        """Toggle favorite status."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get current status
+            cursor.execute("SELECT is_favorite FROM templates WHERE id = ?", (template_id,))
+            row = cursor.fetchone()
+            if not row:
+                return False
+
+            new_status = 0 if row[0] else 1
+            cursor.execute("UPDATE templates SET is_favorite = ? WHERE id = ?", (new_status, template_id))
+
+            return cursor.rowcount > 0
+
+    def increment_template_usage(self, template_id: str):
+        """Track usage for sorting."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM doctors
-                WHERE specialty = ? AND is_active = 1
-                ORDER BY name
-            """, (specialty,))
-            return [Doctor(**dict(row)) for row in cursor.fetchall()]
+                UPDATE templates
+                SET usage_count = usage_count + 1
+                WHERE id = ?
+            """, (template_id,))
 
-    def get_all_doctors(self, active_only: bool = True) -> List[Doctor]:
-        """Get all doctors."""
+    def load_initial_templates(self, templates_data: list[dict]):
+        """Load initial templates from JSON data."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            sql = "SELECT * FROM doctors"
-            if active_only:
-                sql += " WHERE is_active = 1"
-            sql += " ORDER BY specialty, name"
-            cursor.execute(sql)
-            return [Doctor(**dict(row)) for row in cursor.fetchall()]
 
-    # ============== CONSULTATION OPERATIONS ==============
+            for template in templates_data:
+                # Check if template already exists
+                cursor.execute("SELECT id FROM templates WHERE id = ?", (template['id'],))
+                if cursor.fetchone():
+                    continue  # Skip if already exists
 
-    def add_consultation(self, consultation: Consultation) -> Consultation:
-        """Add a new consultation."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            consult_date = consultation.consult_date or date.today()
-            cursor.execute("""
-                INSERT INTO consultations (
-                    patient_id, requesting_doctor_id, consulting_doctor_id,
-                    consulting_specialty, consult_date, reason_for_referral,
-                    clinical_question, findings, impression, recommendations,
-                    follow_up_needed, follow_up_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                consultation.patient_id, consultation.requesting_doctor_id,
-                consultation.consulting_doctor_id, consultation.consulting_specialty,
-                consult_date, consultation.reason_for_referral,
-                consultation.clinical_question, consultation.findings,
-                consultation.impression, consultation.recommendations,
-                consultation.follow_up_needed, consultation.follow_up_date
-            ))
-            consultation.id = cursor.lastrowid
+                prescription_json = json.dumps(template['prescription'])
 
-            # Auto-add to care team
-            self._add_to_care_team_on_consult(cursor, consultation)
-
-            return consultation
-
-    def _add_to_care_team_on_consult(self, cursor, consultation: Consultation):
-        """Add consulting doctor to care team when consultation is created."""
-        if consultation.consulting_doctor_id:
-            try:
                 cursor.execute("""
-                    INSERT OR IGNORE INTO care_team (
-                        patient_id, doctor_id, role, specialty, start_date
-                    ) VALUES (?, ?, 'consultant', ?, ?)
-                """, (
-                    consultation.patient_id,
-                    consultation.consulting_doctor_id,
-                    consultation.consulting_specialty,
-                    consultation.consult_date or date.today()
-                ))
-            except Exception:
-                pass  # Ignore if already exists
+                    INSERT INTO templates (id, name, category, prescription_json, is_custom)
+                    VALUES (?, ?, ?, ?, 0)
+                """, (template['id'], template['name'], template['category'], prescription_json))
 
-    def get_consultations_by_specialty(
-        self,
-        patient_id: int,
-        specialty: str,
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """Get all consultations from a specific specialty for a patient."""
+    # ============== PHRASE OPERATIONS ==============
+
+    def _init_default_phrases(self, cursor):
+        """Initialize default phrases if table is empty."""
+        cursor.execute("SELECT COUNT(*) FROM phrases")
+        count = cursor.fetchone()[0]
+
+        if count == 0:
+            # Load default phrases from JSON file
+            data_dir = Path(__file__).parent.parent / "data"
+            phrases_file = data_dir / "initial_phrases.json"
+
+            if phrases_file.exists():
+                try:
+                    with open(phrases_file, 'r') as f:
+                        phrases_data = json.load(f)
+
+                    for phrase in phrases_data.get("phrases", []):
+                        cursor.execute("""
+                            INSERT INTO phrases (shortcut, expansion, category, is_custom)
+                            VALUES (?, ?, ?, 0)
+                        """, (phrase["shortcut"], phrase["expansion"], phrase.get("category")))
+                except Exception as e:
+                    print(f"Warning: Could not load default phrases: {e}")
+
+    def get_all_phrases(self) -> list[dict]:
+        """Get all phrases."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT
-                    c.id, c.consult_date, c.reason_for_referral,
-                    c.clinical_question, c.findings, c.impression,
-                    c.recommendations, c.follow_up_needed, c.follow_up_date,
-                    d.name as doctor_name, d.designation
-                FROM consultations c
-                LEFT JOIN doctors d ON c.consulting_doctor_id = d.id
-                WHERE c.patient_id = ?
-                  AND c.consulting_specialty = ?
-                ORDER BY c.consult_date DESC
-                LIMIT ?
-            """, (patient_id, specialty, limit))
+                SELECT id, shortcut, expansion, category, is_custom, usage_count
+                FROM phrases
+                ORDER BY usage_count DESC, shortcut ASC
+            """)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_all_patient_consultations(
-        self,
-        patient_id: int,
-        limit: int = 20
-    ) -> List[Dict[str, Any]]:
-        """Get all consultations for a patient."""
+    def get_phrase(self, shortcut: str) -> str | None:
+        """Get expansion for shortcut (case-insensitive)."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT
-                    c.*,
-                    d.name as doctor_name,
-                    d.specialty,
-                    d.designation
-                FROM consultations c
-                LEFT JOIN doctors d ON c.consulting_doctor_id = d.id
-                WHERE c.patient_id = ?
-                ORDER BY c.consult_date DESC
-                LIMIT ?
-            """, (patient_id, limit))
-            return [dict(row) for row in cursor.fetchall()]
+                SELECT expansion FROM phrases
+                WHERE LOWER(shortcut) = LOWER(?)
+            """, (shortcut,))
+            row = cursor.fetchone()
+            return row[0] if row else None
 
-    # ============== CARE TEAM OPERATIONS ==============
-
-    def add_to_care_team(self, member: CareTeamMember) -> CareTeamMember:
-        """Add a doctor to a patient's care team."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            start_date = member.start_date or date.today()
-            cursor.execute("""
-                INSERT OR REPLACE INTO care_team (
-                    patient_id, doctor_id, role, specialty, start_date, added_by
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                member.patient_id, member.doctor_id, member.role,
-                member.specialty, start_date, member.added_by
-            ))
-            member.id = cursor.lastrowid
-            return member
-
-    def get_patient_care_team(self, patient_id: int) -> List[Dict[str, Any]]:
-        """Get all active care team members for a patient."""
+    def add_phrase(self, shortcut: str, expansion: str, category: str = None) -> int:
+        """Add custom phrase. Returns phrase ID."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT
-                    ct.*,
-                    d.name as doctor_name,
-                    d.designation
-                FROM care_team ct
-                JOIN doctors d ON ct.doctor_id = d.id
-                WHERE ct.patient_id = ?
-                  AND (ct.end_date IS NULL OR ct.end_date >= CURRENT_DATE)
-                ORDER BY ct.role, ct.start_date
-            """, (patient_id,))
-            return [dict(row) for row in cursor.fetchall()]
-
-    def is_in_care_team(self, doctor_id: int, patient_id: int) -> bool:
-        """Check if a doctor is in a patient's care team."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT 1 FROM care_team
-                WHERE patient_id = ? AND doctor_id = ?
-                  AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-                LIMIT 1
-            """, (patient_id, doctor_id))
-            return cursor.fetchone() is not None
-
-    # ============== ALLERGY OPERATIONS ==============
-
-    def add_allergy(
-        self,
-        patient_id: int,
-        allergen: str,
-        reaction: str = "",
-        severity: str = ""
-    ) -> int:
-        """Add an allergy for a patient."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT OR REPLACE INTO patient_allergies (
-                    patient_id, allergen, reaction, severity
-                ) VALUES (?, ?, ?, ?)
-            """, (patient_id, allergen.upper(), reaction, severity))
+                INSERT INTO phrases (shortcut, expansion, category, is_custom)
+                VALUES (?, ?, ?, 1)
+            """, (shortcut.strip(), expansion.strip(), category))
             return cursor.lastrowid
 
-    def get_patient_allergies(self, patient_id: int) -> List[Dict[str, Any]]:
-        """Get all allergies for a patient."""
+    def update_phrase(self, phrase_id: int, shortcut: str, expansion: str, category: str = None) -> bool:
+        """Update a phrase."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM patient_allergies
+                UPDATE phrases
+                SET shortcut = ?, expansion = ?, category = ?
+                WHERE id = ?
+            """, (shortcut.strip(), expansion.strip(), category, phrase_id))
+            return cursor.rowcount > 0
+
+    def delete_phrase(self, phrase_id: int) -> bool:
+        """Delete a phrase (only custom phrases can be deleted)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM phrases
+                WHERE id = ? AND is_custom = 1
+            """, (phrase_id,))
+            return cursor.rowcount > 0
+
+    def increment_phrase_usage(self, shortcut: str):
+        """Track usage of a phrase."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE phrases
+                SET usage_count = usage_count + 1
+                WHERE LOWER(shortcut) = LOWER(?)
+            """, (shortcut,))
+
+    def search_phrases(self, query: str) -> list[dict]:
+        """Search phrases by shortcut or expansion."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            search_term = f"%{query}%"
+            cursor.execute("""
+                SELECT id, shortcut, expansion, category, is_custom, usage_count
+                FROM phrases
+                WHERE shortcut LIKE ? OR expansion LIKE ?
+                ORDER BY usage_count DESC, shortcut ASC
+            """, (search_term, search_term))
+            return [dict(row) for row in cursor.fetchall()]
+
+    # ============== DRUG DATABASE OPERATIONS ==============
+
+    def search_drugs(self, query: str, limit: int = 10) -> list[dict]:
+        """Fuzzy search drugs by generic or brand name.
+        Returns sorted by usage_count (most used first).
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Case-insensitive LIKE search on generic name and brand names
+            search_term = f"%{query}%"
+            cursor.execute("""
+                SELECT * FROM drugs
+                WHERE generic_name LIKE ? OR brand_names LIKE ?
+                ORDER BY usage_count DESC, generic_name ASC
+                LIMIT ?
+            """, (search_term, search_term, limit))
+
+            results = []
+            for row in cursor.fetchall():
+                drug = dict(row)
+                # Parse JSON arrays
+                if drug.get('brand_names'):
+                    try:
+                        drug['brand_names'] = json.loads(drug['brand_names'])
+                    except:
+                        drug['brand_names'] = []
+                else:
+                    drug['brand_names'] = []
+
+                if drug.get('strengths'):
+                    try:
+                        drug['strengths'] = json.loads(drug['strengths'])
+                    except:
+                        drug['strengths'] = []
+                else:
+                    drug['strengths'] = []
+
+                if drug.get('forms'):
+                    try:
+                        drug['forms'] = json.loads(drug['forms'])
+                    except:
+                        drug['forms'] = []
+                else:
+                    drug['forms'] = []
+
+                results.append(drug)
+
+            return results
+
+    def add_custom_drug(self, generic_name: str, brand_names: list,
+                        strengths: list, forms: list, category: str) -> int:
+        """Add a custom drug to the database."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO drugs (generic_name, brand_names, strengths, forms, category, is_custom)
+                VALUES (?, ?, ?, ?, ?, 1)
+            """, (
+                generic_name,
+                json.dumps(brand_names),
+                json.dumps(strengths),
+                json.dumps(forms),
+                category
+            ))
+            return cursor.lastrowid
+
+    def increment_drug_usage(self, drug_id: int):
+        """Increment usage count when drug is prescribed."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE drugs
+                SET usage_count = usage_count + 1,
+                    last_used = ?
+                WHERE id = ?
+            """, (datetime.now().isoformat(), drug_id))
+
+    def get_drug_by_id(self, drug_id: int) -> Optional[dict]:
+        """Get drug details by ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM drugs WHERE id = ?", (drug_id,))
+            row = cursor.fetchone()
+
+            if row:
+                drug = dict(row)
+                # Parse JSON arrays
+                if drug.get('brand_names'):
+                    try:
+                        drug['brand_names'] = json.loads(drug['brand_names'])
+                    except:
+                        drug['brand_names'] = []
+                else:
+                    drug['brand_names'] = []
+
+                if drug.get('strengths'):
+                    try:
+                        drug['strengths'] = json.loads(drug['strengths'])
+                    except:
+                        drug['strengths'] = []
+                else:
+                    drug['strengths'] = []
+
+                if drug.get('forms'):
+                    try:
+                        drug['forms'] = json.loads(drug['forms'])
+                    except:
+                        drug['forms'] = []
+                else:
+                    drug['forms'] = []
+
+                return drug
+            return None
+
+    def seed_initial_drugs(self, drugs_data: list[dict]) -> int:
+        """Seed database with initial drug data if empty.
+        Returns number of drugs added.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check if drugs already exist
+            cursor.execute("SELECT COUNT(*) FROM drugs WHERE is_custom = 0")
+            if cursor.fetchone()[0] > 0:
+                return 0  # Already seeded
+
+            # Insert drugs
+            count = 0
+            for drug in drugs_data:
+                cursor.execute("""
+                    INSERT INTO drugs (generic_name, brand_names, strengths, forms, category, is_custom)
+                    VALUES (?, ?, ?, ?, ?, 0)
+                """, (
+                    drug.get('generic_name'),
+                    json.dumps(drug.get('brand_names', [])),
+                    json.dumps(drug.get('strengths', [])),
+                    json.dumps(drug.get('forms', [])),
+                    drug.get('category', '')
+                ))
+                count += 1
+
+            return count
+
+    # ============== VITALS OPERATIONS ==============
+
+    def add_vitals(self, vitals_data: dict) -> int:
+        """Add vitals record. Auto-calculate BMI if weight and height provided."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Auto-calculate BMI if weight and height are provided
+            weight = vitals_data.get('weight')
+            height = vitals_data.get('height')
+            bmi = vitals_data.get('bmi')
+
+            if weight and height and not bmi:
+                # BMI = weight (kg) / (height (m))^2
+                height_m = height / 100  # Convert cm to m
+                bmi = round(weight / (height_m ** 2), 1)
+                vitals_data['bmi'] = bmi
+
+            cursor.execute("""
+                INSERT INTO vitals (
+                    patient_id, visit_id, recorded_at,
+                    bp_systolic, bp_diastolic, pulse, temperature, spo2, respiratory_rate,
+                    weight, height, bmi,
+                    blood_sugar, sugar_type, notes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                vitals_data.get('patient_id'),
+                vitals_data.get('visit_id'),
+                vitals_data.get('recorded_at'),
+                vitals_data.get('bp_systolic'),
+                vitals_data.get('bp_diastolic'),
+                vitals_data.get('pulse'),
+                vitals_data.get('temperature'),
+                vitals_data.get('spo2'),
+                vitals_data.get('respiratory_rate'),
+                vitals_data.get('weight'),
+                vitals_data.get('height'),
+                vitals_data.get('bmi'),
+                vitals_data.get('blood_sugar'),
+                vitals_data.get('sugar_type'),
+                vitals_data.get('notes')
+            ))
+
+            return cursor.lastrowid
+
+    def get_patient_vitals(self, patient_id: int, limit: int = 20) -> list[dict]:
+        """Get patient's vitals history."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM vitals
                 WHERE patient_id = ?
-                ORDER BY allergen
+                ORDER BY recorded_at DESC
+                LIMIT ?
+            """, (patient_id, limit))
+
+            results = []
+            for row in cursor.fetchall():
+                results.append(dict(row))
+            return results
+
+    def get_latest_vitals(self, patient_id: int) -> dict | None:
+        """Get most recent vitals for patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM vitals
+                WHERE patient_id = ?
+                ORDER BY recorded_at DESC
+                LIMIT 1
+            """, (patient_id,))
+
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def get_last_height(self, patient_id: int) -> float | None:
+        """Get last recorded height (doesn't change often)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT height FROM vitals
+                WHERE patient_id = ? AND height IS NOT NULL
+                ORDER BY recorded_at DESC
+                LIMIT 1
+            """, (patient_id,))
+
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+            return None
+
+    # ==================== DRUG INTERACTIONS ====================
+
+    def load_drug_interactions(self, interactions_data: list[dict]):
+        """Load drug interactions from JSON data."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for item in interactions_data:
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO drug_interactions
+                        (drug1_generic, drug2_generic, severity, effect, mechanism, recommendation)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        item['drug1'],
+                        item['drug2'],
+                        item['severity'],
+                        item.get('effect', ''),
+                        item.get('mechanism', ''),
+                        item.get('recommendation', '')
+                    ))
+                except Exception:
+                    pass  # Skip duplicates
+
+    def check_drug_interactions(self, drugs: list[str]) -> list[dict]:
+        """Check for interactions between a list of drugs.
+
+        Args:
+            drugs: List of drug names (generic)
+
+        Returns:
+            List of interaction dicts with severity, effect, etc.
+        """
+        if len(drugs) < 2:
+            return []
+
+        interactions = []
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check all pairs
+            for i in range(len(drugs)):
+                for j in range(i + 1, len(drugs)):
+                    drug1 = drugs[i].lower()
+                    drug2 = drugs[j].lower()
+
+                    # Search for interaction in either direction
+                    cursor.execute("""
+                        SELECT * FROM drug_interactions
+                        WHERE (LOWER(drug1_generic) LIKE ? AND LOWER(drug2_generic) LIKE ?)
+                           OR (LOWER(drug1_generic) LIKE ? AND LOWER(drug2_generic) LIKE ?)
+                    """, (f'%{drug1}%', f'%{drug2}%', f'%{drug2}%', f'%{drug1}%'))
+
+                    row = cursor.fetchone()
+                    if row:
+                        interactions.append({
+                            'drug1': drugs[i],
+                            'drug2': drugs[j],
+                            'severity': row['severity'],
+                            'effect': row['effect'],
+                            'mechanism': row['mechanism'],
+                            'recommendation': row['recommendation']
+                        })
+
+        # Sort by severity (Contraindicated first, then Severe, etc.)
+        severity_order = {'Contraindicated': 0, 'Severe': 1, 'Moderate': 2, 'Minor': 3}
+        interactions.sort(key=lambda x: severity_order.get(x['severity'], 4))
+
+        return interactions
+
+    def check_against_current_meds(self, patient_id: int, new_drugs: list[str]) -> list[dict]:
+        """Check new drugs against patient's current medications.
+
+        Args:
+            patient_id: Patient ID
+            new_drugs: List of new drug names
+
+        Returns:
+            List of interactions with current medications
+        """
+        # Get medications from recent visits (last 6 months)
+        current_meds = set()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT prescription_json FROM visits
+                WHERE patient_id = ?
+                  AND is_deleted = 0
+                  AND visit_date >= date('now', '-6 months')
+                ORDER BY visit_date DESC
+            """, (patient_id,))
+
+            for row in cursor.fetchall():
+                if row['prescription_json']:
+                    try:
+                        rx = json.loads(row['prescription_json'])
+                        for med in rx.get('medications', []):
+                            drug_name = med.get('drug_name', '')
+                            if drug_name:
+                                current_meds.add(drug_name)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+        # Combine current meds with new drugs and check
+        all_drugs = list(current_meds) + new_drugs
+        return self.check_drug_interactions(all_drugs)
+
+    def log_interaction_override(self, patient_id: int, visit_id: int,
+                                  drug1: str, drug2: str, severity: str, reason: str):
+        """Log when doctor overrides an interaction warning."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO interaction_overrides
+                (patient_id, visit_id, drug1, drug2, severity, reason)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (patient_id, visit_id, drug1, drug2, severity, reason))
+
+    # ==================== CLINICAL ALERTS ====================
+
+    def create_alert(self, patient_id: int, alert_type: str, severity: str,
+                     title: str, message: str) -> int:
+        """Create a new clinical alert."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO alerts (patient_id, alert_type, severity, title, message)
+                VALUES (?, ?, ?, ?, ?)
+            """, (patient_id, alert_type, severity, title, message))
+            return cursor.lastrowid
+
+    def get_active_alerts(self, patient_id: int) -> list[dict]:
+        """Get unacknowledged alerts for patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM alerts
+                WHERE patient_id = ?
+                  AND is_resolved = 0
+                  AND (snoozed_until IS NULL OR snoozed_until < datetime('now'))
+                ORDER BY
+                    CASE severity
+                        WHEN 'critical' THEN 0
+                        WHEN 'warning' THEN 1
+                        ELSE 2
+                    END,
+                    triggered_at DESC
             """, (patient_id,))
             return [dict(row) for row in cursor.fetchall()]
 
-    def check_allergy(self, patient_id: int, drug_name: str) -> Optional[Dict[str, Any]]:
-        """Check if patient is allergic to a drug."""
+    def acknowledge_alert(self, alert_id: int, action: str):
+        """Mark alert as acknowledged with action taken."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            # Check exact match and partial match
             cursor.execute("""
-                SELECT * FROM patient_allergies
+                UPDATE alerts
+                SET acknowledged_at = datetime('now'),
+                    acknowledged_action = ?,
+                    is_resolved = 1
+                WHERE id = ?
+            """, (action, alert_id))
+
+    def snooze_alert(self, alert_id: int, hours: int):
+        """Snooze alert for N hours."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE alerts
+                SET snoozed_until = datetime('now', '+' || ? || ' hours')
+                WHERE id = ?
+            """, (hours, alert_id))
+
+    # ==================== APPOINTMENTS ====================
+
+    def add_appointment(self, patient_id: int, date: str, time: str = None,
+                        appt_type: str = "follow-up", notes: str = None) -> int:
+        """Add a new appointment."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO appointments
+                (patient_id, appointment_date, appointment_time, appointment_type, notes)
+                VALUES (?, ?, ?, ?, ?)
+            """, (patient_id, date, time, appt_type, notes))
+            return cursor.lastrowid
+
+    def get_appointments_for_date(self, date: str) -> list[dict]:
+        """Get all appointments for a specific date."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT a.*, p.name as patient_name, p.phone as patient_phone
+                FROM appointments a
+                JOIN patients p ON a.patient_id = p.id
+                WHERE a.appointment_date = ?
+                  AND a.is_deleted = 0
+                ORDER BY a.appointment_time
+            """, (date,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_todays_appointments(self) -> list[dict]:
+        """Get today's appointments."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        return self.get_appointments_for_date(today)
+
+    def get_patient_appointments(self, patient_id: int, include_past: bool = False) -> list[dict]:
+        """Get appointments for a patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if include_past:
+                cursor.execute("""
+                    SELECT * FROM appointments
+                    WHERE patient_id = ? AND is_deleted = 0
+                    ORDER BY appointment_date DESC, appointment_time DESC
+                """, (patient_id,))
+            else:
+                cursor.execute("""
+                    SELECT * FROM appointments
+                    WHERE patient_id = ?
+                      AND is_deleted = 0
+                      AND appointment_date >= date('now')
+                    ORDER BY appointment_date, appointment_time
+                """, (patient_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_next_appointment(self, patient_id: int) -> dict | None:
+        """Get next upcoming appointment for patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM appointments
                 WHERE patient_id = ?
-                  AND (UPPER(allergen) = UPPER(?)
-                       OR UPPER(?) LIKE '%' || UPPER(allergen) || '%'
-                       OR UPPER(allergen) LIKE '%' || UPPER(?) || '%')
+                  AND is_deleted = 0
+                  AND appointment_date >= date('now')
+                ORDER BY appointment_date, appointment_time
                 LIMIT 1
-            """, (patient_id, drug_name, drug_name, drug_name))
+            """, (patient_id,))
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    # ============== PATIENT SNAPSHOT OPERATIONS ==============
-
-    def save_patient_snapshot(self, snapshot: PatientSnapshot):
-        """Save or update a patient's snapshot."""
+    def update_appointment_status(self, appt_id: int, status: str):
+        """Update appointment status."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT OR REPLACE INTO patient_snapshots (
-                    patient_id, uhid, demographics,
-                    active_problems_json, current_medications_json, allergies_json,
-                    key_labs_json, vitals_json, blood_group, code_status,
-                    on_anticoagulation, anticoag_drug, last_visit_date,
-                    major_events_json, last_updated
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                snapshot.patient_id, snapshot.uhid, snapshot.demographics,
-                json.dumps(snapshot.active_problems),
-                json.dumps([m.model_dump() for m in snapshot.current_medications]),
-                json.dumps(snapshot.allergies),
-                json.dumps(snapshot.key_labs),
-                json.dumps(snapshot.vitals),
-                snapshot.blood_group, snapshot.code_status,
-                snapshot.on_anticoagulation, snapshot.anticoag_drug,
-                snapshot.last_visit_date,
-                json.dumps(snapshot.major_events),
-                datetime.now()
-            ))
+                UPDATE appointments SET status = ? WHERE id = ?
+            """, (status, appt_id))
 
-    def get_patient_snapshot(self, patient_id: int) -> Optional[PatientSnapshot]:
-        """Get a patient's snapshot."""
+    def cancel_appointment(self, appt_id: int):
+        """Cancel (soft delete) an appointment."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM patient_snapshots WHERE patient_id = ?
+                UPDATE appointments SET is_deleted = 1, status = 'cancelled' WHERE id = ?
+            """, (appt_id,))
+
+    # ============== PATIENT PREFERENCES ==============
+
+    def get_patient_preferences(self, patient_id: int) -> dict | None:
+        """Get patient preferences for reminders etc."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM patient_preferences WHERE patient_id = ?
             """, (patient_id,))
             row = cursor.fetchone()
-            if row:
-                data = dict(row)
-                return PatientSnapshot(
-                    patient_id=data['patient_id'],
-                    uhid=data['uhid'] or '',
-                    demographics=data['demographics'] or '',
-                    active_problems=json.loads(data['active_problems_json'] or '[]'),
-                    current_medications=[
-                        Medication(**m) for m in json.loads(data['current_medications_json'] or '[]')
-                    ],
-                    allergies=json.loads(data['allergies_json'] or '[]'),
-                    key_labs=json.loads(data['key_labs_json'] or '{}'),
-                    vitals=json.loads(data['vitals_json'] or '{}'),
-                    blood_group=data['blood_group'],
-                    code_status=data['code_status'] or 'FULL',
-                    on_anticoagulation=bool(data['on_anticoagulation']),
-                    anticoag_drug=data['anticoag_drug'],
-                    last_visit_date=data['last_visit_date'],
-                    major_events=json.loads(data['major_events_json'] or '[]'),
-                    last_updated=data['last_updated']
-                )
-            return None
+            return dict(row) if row else None
 
-    def compute_patient_snapshot(self, patient_id: int) -> PatientSnapshot:
-        """Compute and save a patient's snapshot from their data."""
-        patient = self.get_patient(patient_id)
-        if not patient:
-            raise ValueError(f"Patient {patient_id} not found")
-
-        # Build demographics string
-        demographics = patient.name
-        if patient.age:
-            demographics += f", {patient.age}"
-        if patient.gender:
-            demographics += patient.gender
-
-        # Get allergies
-        allergies = [a['allergen'] for a in self.get_patient_allergies(patient_id)]
-
-        # Get active problems from recent visits
-        visits = self.get_patient_visits(patient_id)
-        active_problems = []
-        seen_diagnoses = set()
-        for visit in visits[:20]:  # Last 20 visits
-            if visit.diagnosis and visit.diagnosis not in seen_diagnoses:
-                active_problems.append(visit.diagnosis)
-                seen_diagnoses.add(visit.diagnosis)
-            if len(active_problems) >= 10:
-                break
-
-        # Get current medications from most recent visit
-        current_medications = []
-        for visit in visits:
-            if visit.prescription_json:
-                try:
-                    rx = json.loads(visit.prescription_json)
-                    if rx.get('medications'):
-                        current_medications = [Medication(**m) for m in rx['medications']]
-                        break
-                except (json.JSONDecodeError, Exception):
-                    pass
-
-        # Get key labs (most recent of each important test)
-        key_labs = {}
-        key_test_names = ['creatinine', 'hba1c', 'hemoglobin', 'potassium', 'sodium']
-        investigations = self.get_patient_investigations(patient_id)
-        for inv in investigations:
-            test_lower = inv.test_name.lower()
-            for key_test in key_test_names:
-                if key_test in test_lower and key_test not in key_labs:
-                    key_labs[key_test] = {
-                        'value': inv.result,
-                        'unit': inv.unit,
-                        'date': str(inv.test_date),
-                        'abnormal': inv.is_abnormal
-                    }
-
-        # Get major procedures
-        procedures = self.get_patient_procedures(patient_id)
-        major_events = [
-            f"{p.procedure_name} - {p.procedure_date}"
-            for p in procedures[:5]
-        ]
-
-        # Check for anticoagulation
-        anticoag_drugs = ['warfarin', 'rivaroxaban', 'apixaban', 'dabigatran', 'heparin', 'enoxaparin']
-        on_anticoag = False
-        anticoag_drug = None
-        for med in current_medications:
-            if any(ac in med.drug_name.lower() for ac in anticoag_drugs):
-                on_anticoag = True
-                anticoag_drug = med.drug_name
-                break
-
-        # Create snapshot
-        snapshot = PatientSnapshot(
-            patient_id=patient_id,
-            uhid=patient.uhid or '',
-            demographics=demographics,
-            active_problems=active_problems,
-            current_medications=current_medications,
-            allergies=allergies,
-            key_labs=key_labs,
-            vitals={},  # Would need vitals table
-            blood_group=None,  # Would need to extract from data
-            code_status='FULL',
-            on_anticoagulation=on_anticoag,
-            anticoag_drug=anticoag_drug,
-            last_visit_date=visits[0].visit_date if visits else None,
-            major_events=major_events,
-            last_updated=datetime.now()
-        )
-
-        # Save it
-        self.save_patient_snapshot(snapshot)
-        return snapshot
-
-    # ============== AUDIT LOG OPERATIONS ==============
-
-    def log_action(
-        self,
-        user_id: int,
-        user_name: str,
-        user_role: str,
-        action: str,
-        resource_type: str,
-        resource_id: Optional[int] = None,
-        patient_id: Optional[int] = None,
-        details: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        workstation_id: Optional[str] = None
-    ):
-        """Log an action to the audit trail."""
+    def set_patient_preferences(self, patient_id: int, preferences: dict):
+        """Set or update patient preferences."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO audit_log (
-                    user_id, user_name, user_role, action, resource_type,
-                    resource_id, patient_id, details, ip_address, workstation_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO patient_preferences (
+                    patient_id, reminder_opted_out, preferred_channel,
+                    reminder_timing, clinical_reminders
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(patient_id) DO UPDATE SET
+                    reminder_opted_out = excluded.reminder_opted_out,
+                    preferred_channel = excluded.preferred_channel,
+                    reminder_timing = excluded.reminder_timing,
+                    clinical_reminders = excluded.clinical_reminders
             """, (
-                user_id, user_name, user_role, action, resource_type,
-                resource_id, patient_id, details, ip_address, workstation_id
+                patient_id,
+                preferences.get('reminder_opted_out', 0),
+                preferences.get('preferred_channel', 'whatsapp'),
+                preferences.get('reminder_timing', '1_day'),
+                preferences.get('clinical_reminders', 1)
             ))
 
-    def get_patient_audit_log(
+    def opt_out_reminders(self, patient_id: int, opt_out: bool = True):
+        """Opt patient in/out of reminders."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO patient_preferences (patient_id, reminder_opted_out)
+                VALUES (?, ?)
+                ON CONFLICT(patient_id) DO UPDATE SET reminder_opted_out = ?
+            """, (patient_id, 1 if opt_out else 0, 1 if opt_out else 0))
+
+    # ============== REMINDER LOG ==============
+
+    def log_reminder(
         self,
         patient_id: int,
-        limit: int = 100
-    ) -> List[AuditLogEntry]:
-        """Get audit log for a specific patient."""
+        reminder_type: str,
+        reference_id: int | None,
+        channel: str,
+        status: str,
+        message: str = None
+    ) -> int:
+        """Log a sent reminder."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM audit_log
-                WHERE patient_id = ?
-                ORDER BY timestamp DESC
+                INSERT INTO reminder_log (
+                    patient_id, reminder_type, reference_id,
+                    channel, status, message
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """, (patient_id, reminder_type, reference_id, channel, status, message))
+            return cursor.lastrowid
+
+    def get_reminder_logs(
+        self,
+        patient_id: int = None,
+        reference_id: int = None,
+        reminder_type: str = None,
+        date: str = None,
+        limit: int = 50
+    ) -> list[dict]:
+        """Get reminder logs with optional filters."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM reminder_log WHERE 1=1"
+            params = []
+
+            if patient_id:
+                query += " AND patient_id = ?"
+                params.append(patient_id)
+            if reference_id:
+                query += " AND reference_id = ?"
+                params.append(reference_id)
+            if reminder_type:
+                query += " AND reminder_type = ?"
+                params.append(reminder_type)
+            if date:
+                query += " AND date(sent_at) = ?"
+                params.append(date)
+
+            query += " ORDER BY sent_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_pending_reminder_count(self, days_ahead: int = 1) -> int:
+        """Get count of appointments needing reminders."""
+        from datetime import date as dt, timedelta
+        target_date = (dt.today() + timedelta(days=days_ahead)).isoformat()
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM appointments a
+                LEFT JOIN patient_preferences pp ON a.patient_id = pp.patient_id
+                WHERE a.appointment_date = ?
+                  AND a.is_deleted = 0
+                  AND a.status != 'cancelled'
+                  AND (pp.reminder_opted_out IS NULL OR pp.reminder_opted_out = 0)
+                  AND a.id NOT IN (
+                      SELECT reference_id FROM reminder_log
+                      WHERE reminder_type = 'appointment'
+                        AND date(sent_at) = date('now')
+                        AND reference_id IS NOT NULL
+                  )
+            """, (target_date,))
+            return cursor.fetchone()[0]
+
+    def get_reminder_history(self, patient_id: int, limit: int = 20) -> list[dict]:
+        """Get reminder history for a patient."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT r.*, a.appointment_date, a.appointment_time
+                FROM reminder_log r
+                LEFT JOIN appointments a ON r.reference_id = a.id AND r.reminder_type = 'appointment'
+                WHERE r.patient_id = ?
+                ORDER BY r.sent_at DESC
                 LIMIT ?
             """, (patient_id, limit))
-            return [AuditLogEntry(**dict(row)) for row in cursor.fetchall()]
-
-    def get_user_audit_log(
-        self,
-        user_id: int,
-        limit: int = 100
-    ) -> List[AuditLogEntry]:
-        """Get audit log for a specific user."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM audit_log
-                WHERE user_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (user_id, limit))
-            return [AuditLogEntry(**dict(row)) for row in cursor.fetchall()]
+            return [dict(row) for row in cursor.fetchall()]

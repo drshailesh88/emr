@@ -6,19 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ..models.schemas import Patient
-from ..services.context_builder import ContextBuilder
-from ..services.app_mode import ModeCapabilities
-
-# Optional imports
-try:
-    from ..services.llm import LLMService
-except ImportError:
-    LLMService = None
-
-try:
-    from ..services.rag import RAGService
-except ImportError:
-    RAGService = None
+from ..services.llm import LLMService
+from ..services.rag import RAGService
 
 
 @dataclass
@@ -39,16 +28,12 @@ class AgentPanel:
     def __init__(
         self,
         on_query: Callable[[str, Callable], None],
-        llm=None,
-        rag=None,
-        context_builder: Optional[ContextBuilder] = None,
-        capabilities: Optional[ModeCapabilities] = None,
+        llm: LLMService,
+        rag: RAGService
     ):
         self.on_query = on_query
         self.llm = llm
         self.rag = rag
-        self.context_builder = context_builder
-        self.capabilities = capabilities
 
         self.current_patient: Optional[Patient] = None
         self.messages: List[ChatMessage] = []
@@ -59,30 +44,10 @@ class AgentPanel:
         self.send_btn: Optional[ft.IconButton] = None
         self.loading_indicator: Optional[ft.ProgressRing] = None
         self.patient_context: Optional[ft.Text] = None
-        self.mode_indicator: Optional[ft.Container] = None
+        self.doc_count: Optional[ft.Text] = None
 
     def build(self) -> ft.Control:
         """Build the agent panel UI."""
-
-        # Determine mode text
-        if self.capabilities and self.capabilities.llm_query_answering:
-            if self.capabilities.semantic_search:
-                mode_text = "Full AI"
-                mode_color = ft.Colors.GREEN_700
-            else:
-                mode_text = "SQL + LLM"
-                mode_color = ft.Colors.BLUE_700
-        else:
-            mode_text = "SQL Only"
-            mode_color = ft.Colors.GREY_700
-
-        # Mode indicator
-        self.mode_indicator = ft.Container(
-            content=ft.Text(mode_text, size=9, color=ft.Colors.WHITE),
-            bgcolor=mode_color,
-            padding=ft.padding.symmetric(horizontal=6, vertical=2),
-            border_radius=8,
-        )
 
         # Header with patient context
         self.patient_context = ft.Text(
@@ -92,14 +57,29 @@ class AgentPanel:
             italic=True,
         )
 
+        self.doc_count = ft.Text(
+            "",
+            size=11,
+            color=ft.Colors.GREY_500,
+        )
+
+        # Clear chat button
+        clear_btn = ft.IconButton(
+            icon=ft.Icons.DELETE_SWEEP,
+            icon_size=18,
+            tooltip="Clear chat (Ctrl+L)",
+            on_click=lambda e: self.clear_chat(),
+        )
+
         header = ft.Container(
             content=ft.Column([
                 ft.Row([
                     ft.Icon(ft.Icons.SMART_TOY, color=ft.Colors.BLUE_700, size=20),
                     ft.Text("AI Assistant", size=14, weight=ft.FontWeight.BOLD),
-                    self.mode_indicator,
-                ], spacing=8),
+                    clear_btn,
+                ], spacing=8, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 self.patient_context,
+                self.doc_count,
             ], spacing=5),
             padding=15,
             bgcolor=ft.Colors.BLUE_100,
@@ -113,27 +93,15 @@ class AgentPanel:
             auto_scroll=True,
         )
 
-        # Welcome message based on mode
-        if self.capabilities and self.capabilities.llm_query_answering:
-            welcome = (
-                "Hello! I can help you query this patient's medical records. "
-                "Try asking questions like:\n\n"
-                "- What was his last creatinine?\n"
-                "- When was his last echo done?\n"
-                "- What did nephrology recommend?\n"
-                "- Summarize his cardiac history"
-            )
-        else:
-            welcome = (
-                "Hello! I can search this patient's records for you. "
-                "(AI interpretation is disabled in Lite mode)\n\n"
-                "Try asking:\n"
-                "- Show lab results\n"
-                "- Show consultations\n"
-                "- Show recent visits"
-            )
-
-        self._add_assistant_message(welcome)
+        # Welcome message
+        self._add_assistant_message(
+            "Hello! I can help you query this patient's medical records. "
+            "Try asking questions like:\n\n"
+            "• What was his last creatinine?\n"
+            "• When was his last echo done?\n"
+            "• What medications is he on?\n"
+            "• Summarize his cardiac history"
+        )
 
         # Loading indicator
         self.loading_indicator = ft.ProgressRing(visible=False, width=16, height=16)
@@ -152,6 +120,7 @@ class AgentPanel:
         self.send_btn = ft.IconButton(
             icon=ft.Icons.SEND,
             icon_color=ft.Colors.BLUE_700,
+            tooltip="Send message (Enter)",
             on_click=self._on_send_click,
         )
 
@@ -166,25 +135,24 @@ class AgentPanel:
             border=ft.border.only(top=ft.BorderSide(1, ft.Colors.GREY_300)),
         )
 
-        # Quick action buttons - adapt based on mode
-        quick_actions_list = [
-            ("Labs", "What are the most recent lab results?"),
-            ("Meds", "List all current medications"),
-        ]
-
-        if self.capabilities and self.capabilities.llm_query_answering:
-            quick_actions_list.append(("Summary", "Give me a brief summary of this patient"))
-        else:
-            quick_actions_list.append(("Visits", "Show recent visits"))
-
+        # Quick action buttons
         quick_actions = ft.Container(
             content=ft.Row([
                 ft.TextButton(
-                    label,
+                    "Last labs",
                     style=ft.ButtonStyle(padding=5),
-                    on_click=lambda e, q=query: self._quick_query(q),
-                )
-                for label, query in quick_actions_list
+                    on_click=lambda e: self._quick_query("What are the most recent lab results?"),
+                ),
+                ft.TextButton(
+                    "Medications",
+                    style=ft.ButtonStyle(padding=5),
+                    on_click=lambda e: self._quick_query("List all current medications"),
+                ),
+                ft.TextButton(
+                    "Summary",
+                    style=ft.ButtonStyle(padding=5),
+                    on_click=lambda e: self._quick_query("Give me a brief summary of this patient"),
+                ),
             ], spacing=5, wrap=True),
             padding=ft.padding.symmetric(horizontal=10),
         )
@@ -205,21 +173,17 @@ class AgentPanel:
         self.patient_context.italic = False
         self.patient_context.color = ft.Colors.BLUE_700
 
+        # Get document count
+        doc_count = self.rag.get_patient_document_count(patient.id)
+        self.doc_count.value = f"{doc_count} records indexed"
+
         # Clear chat history (keep welcome message)
         self.messages = []
         self.chat_list.controls.clear()
-
-        # Get record count info
-        if self.capabilities and self.capabilities.llm_query_answering:
-            self._add_assistant_message(
-                f"Now viewing records for {patient.name}. "
-                f"What would you like to know?"
-            )
-        else:
-            self._add_assistant_message(
-                f"Now viewing records for {patient.name}. "
-                f"I can search records for you (AI interpretation not available in this mode)."
-            )
+        self._add_assistant_message(
+            f"Now viewing records for {patient.name}. "
+            f"I have access to {doc_count} records. What would you like to know?"
+        )
 
         if self.patient_context.page:
             self.patient_context.page.update()
@@ -312,3 +276,34 @@ class AgentPanel:
                 self.loading_indicator.page.update()
 
         self.on_query(query, callback)
+
+    def clear_chat(self):
+        """Clear the chat history."""
+        # Keep only the welcome message for the current patient
+        if self.current_patient:
+            self.messages = []
+            self.chat_list.controls.clear()
+
+            # Get document count
+            doc_count = self.rag.get_patient_document_count(self.current_patient.id)
+
+            # Re-add welcome message
+            self._add_assistant_message(
+                f"Chat cleared. Still viewing records for {self.current_patient.name}. "
+                f"I have access to {doc_count} records. What would you like to know?"
+            )
+        else:
+            # No patient selected, just show default message
+            self.messages = []
+            self.chat_list.controls.clear()
+            self._add_assistant_message(
+                "Hello! I can help you query this patient's medical records. "
+                "Try asking questions like:\n\n"
+                "• What was his last creatinine?\n"
+                "• When was his last echo done?\n"
+                "• What medications is he on?\n"
+                "• Summarize his cardiac history"
+            )
+
+        if self.chat_list.page:
+            self.chat_list.page.update()

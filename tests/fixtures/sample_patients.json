@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Ram Lal",
+    "age": 65,
+    "gender": "M",
+    "phone": "9876543210",
+    "address": "123 Main Street, Delhi"
+  },
+  {
+    "name": "Sita Devi",
+    "age": 60,
+    "gender": "F",
+    "phone": "9876543211",
+    "address": "456 Garden Road, Mumbai"
+  },
+  {
+    "name": "Mohan Singh",
+    "age": 55,
+    "gender": "M",
+    "phone": "9876543212",
+    "address": "789 Park Avenue, Bangalore"
+  },
+  {
+    "name": "Geeta Sharma",
+    "age": 45,
+    "gender": "F",
+    "phone": "9876543213",
+    "address": "321 Lake View, Pune"
+  }
+]

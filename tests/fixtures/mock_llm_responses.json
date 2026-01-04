@@ -1,0 +1,151 @@
+{
+  "prescription_diabetes": {
+    "diagnosis": ["Type 2 Diabetes Mellitus"],
+    "medications": [
+      {
+        "drug_name": "Metformin",
+        "strength": "500mg",
+        "form": "tablet",
+        "dose": "1",
+        "frequency": "BD",
+        "duration": "30 days",
+        "instructions": "after meals"
+      },
+      {
+        "drug_name": "Glimepiride",
+        "strength": "1mg",
+        "form": "tablet",
+        "dose": "1",
+        "frequency": "OD",
+        "duration": "30 days",
+        "instructions": "before breakfast"
+      }
+    ],
+    "investigations": ["HbA1c", "Lipid Profile", "Renal Function Test"],
+    "advice": [
+      "Low carbohydrate diet",
+      "Regular exercise 30 minutes daily",
+      "Monitor blood sugar fasting and post-prandial",
+      "Avoid sugary foods and beverages"
+    ],
+    "follow_up": "2 weeks with HbA1c report",
+    "red_flags": [
+      "Severe hypoglycemia (sugar < 70)",
+      "Excessive thirst despite treatment",
+      "Altered consciousness"
+    ]
+  },
+  "prescription_hypertension": {
+    "diagnosis": ["Essential Hypertension"],
+    "medications": [
+      {
+        "drug_name": "Amlodipine",
+        "strength": "5mg",
+        "form": "tablet",
+        "dose": "1",
+        "frequency": "OD",
+        "duration": "30 days",
+        "instructions": "morning after breakfast"
+      }
+    ],
+    "investigations": ["ECG", "Echocardiography", "Renal Function Test"],
+    "advice": [
+      "Low salt diet (< 5g/day)",
+      "Regular exercise",
+      "Avoid smoking and alcohol",
+      "Monitor BP at home daily"
+    ],
+    "follow_up": "2 weeks",
+    "red_flags": [
+      "Severe chest pain",
+      "Breathlessness at rest",
+      "Severe headache with vision changes"
+    ]
+  },
+  "prescription_gastroenteritis": {
+    "diagnosis": ["Acute Gastroenteritis"],
+    "medications": [
+      {
+        "drug_name": "ORS",
+        "strength": "1 sachet",
+        "form": "powder",
+        "dose": "1",
+        "frequency": "after each loose stool",
+        "duration": "3 days",
+        "instructions": "dissolve in 1L water"
+      },
+      {
+        "drug_name": "Ondansetron",
+        "strength": "4mg",
+        "form": "tablet",
+        "dose": "1",
+        "frequency": "TDS",
+        "duration": "3 days",
+        "instructions": "before meals"
+      },
+      {
+        "drug_name": "Probiotics",
+        "strength": "1 sachet",
+        "form": "powder",
+        "dose": "1",
+        "frequency": "BD",
+        "duration": "5 days",
+        "instructions": "with meals"
+      }
+    ],
+    "investigations": ["Stool routine and culture if fever persists", "CBC if not improving"],
+    "advice": [
+      "Plenty of fluids - water, ORS, coconut water",
+      "Avoid spicy and oily food",
+      "Light diet - rice, curd, banana",
+      "Hand hygiene - wash hands frequently"
+    ],
+    "follow_up": "3 days or immediately if symptoms worsen",
+    "red_flags": [
+      "Bloody stools",
+      "High fever > 102F",
+      "Severe dehydration - decreased urine output",
+      "Severe abdominal pain"
+    ]
+  },
+  "prescription_urti": {
+    "diagnosis": ["Upper Respiratory Tract Infection"],
+    "medications": [
+      {
+        "drug_name": "Paracetamol",
+        "strength": "500mg",
+        "form": "tablet",
+        "dose": "1",
+        "frequency": "TDS",
+        "duration": "3 days",
+        "instructions": "after meals, for fever/pain"
+      },
+      {
+        "drug_name": "Cetirizine",
+        "strength": "10mg",
+        "form": "tablet",
+        "dose": "1",
+        "frequency": "HS",
+        "duration": "5 days",
+        "instructions": "at bedtime"
+      }
+    ],
+    "investigations": [],
+    "advice": [
+      "Steam inhalation twice daily",
+      "Warm salt water gargles",
+      "Adequate rest",
+      "Plenty of warm fluids"
+    ],
+    "follow_up": "5 days if not improving",
+    "red_flags": [
+      "High fever > 102F persisting > 3 days",
+      "Difficulty breathing",
+      "Chest pain",
+      "Severe throat pain with difficulty swallowing"
+    ]
+  },
+  "rag_answer_creatinine": "The last creatinine level was 1.4 mg/dL on 2024-01-10, which is slightly elevated above the normal range of 0.7-1.3 mg/dL. This suggests mild renal impairment.",
+  "rag_answer_hba1c": "The HbA1c level was 7.2% on 2024-01-10, which indicates suboptimal diabetes control. The target for most patients is < 7%.",
+  "rag_answer_medications": "The patient is currently on: Aspirin 75mg OD, Atorvastatin 20mg HS, and Metoprolol 25mg BD as per the last visit on 2024-01-15."
+}

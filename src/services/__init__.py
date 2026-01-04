@@ -21,6 +21,12 @@ try:
 except ImportError:
     PDFService = None
 
+# Export Service
+try:
+    from .export import ExportService
+except ImportError:
+    ExportService = None
+
 # Phonetic Search (for Indian names)
 from .phonetic import IndianPhoneticSearch, MultiStrategySearch, get_phonetic_code
 
@@ -56,6 +62,8 @@ __all__ = [
     "RAGService",
     # PDF
     "PDFService",
+    # Export
+    "ExportService",
     # Phonetic
     "IndianPhoneticSearch",
     "MultiStrategySearch",
