@@ -1,4 +1,8 @@
-"""Main Flet application with 3-panel layout."""
+"""
+Main Flet application with premium 3-panel layout.
+
+Uses design tokens from tokens.py for consistent, premium styling.
+"""
 
 import flet as ft
 from typing import Optional
@@ -19,11 +23,25 @@ from .central_panel import CentralPanel
 from .agent_panel import AgentPanel
 from .backup_dialog import show_backup_dialog
 
+# Import premium design system
+from .themes import (
+    get_light_theme,
+    get_dark_theme,
+    get_panel_colors,
+    get_alert_colors,
+    get_button_style,
+    Colors,
+    Typography,
+    Spacing,
+    Radius,
+    Shadows,
+)
+
 logger = logging.getLogger(__name__)
 
 
 class DocAssistApp:
-    """Main application class."""
+    """Main application class with premium UI."""
 
     def __init__(self):
         self.db = DatabaseService()
@@ -43,6 +61,7 @@ class DocAssistApp:
 
         self.current_patient: Optional[Patient] = None
         self.page: Optional[ft.Page] = None
+        self.is_dark_mode: bool = False
 
         # UI components (initialized in build)
         self.patient_panel: Optional[PatientPanel] = None
@@ -54,7 +73,12 @@ class DocAssistApp:
         """Main entry point for Flet app."""
         self.page = page
         page.title = "DocAssist EMR"
+
+        # Apply premium theme
+        page.theme = get_light_theme()
+        page.dark_theme = get_dark_theme()
         page.theme_mode = ft.ThemeMode.LIGHT
+
         page.padding = 0
         page.spacing = 0
 
@@ -81,8 +105,13 @@ class DocAssistApp:
         if self.scheduler:
             self.scheduler.start()
 
+    def _get_colors(self):
+        """Get current theme colors."""
+        return get_panel_colors(self.is_dark_mode)
+
     def _build_ui(self) -> ft.Control:
-        """Build the main UI layout."""
+        """Build the premium main UI layout."""
+        colors = self._get_colors()
 
         # Initialize panels
         self.patient_panel = PatientPanel(
@@ -106,69 +135,137 @@ class DocAssistApp:
             rag=self.rag
         )
 
-        # Status bar
+        # Premium status bar
         self.status_bar = ft.Text(
             "Ready",
-            size=12,
-            color=ft.Colors.GREY_600
+            size=Typography.BODY_SMALL.size,
+            color=colors['status_text'],
+            weight=ft.FontWeight.W_400,
         )
 
-        # Header
+        # Premium header with subtle shadow
         header = ft.Container(
             content=ft.Row(
                 [
+                    # Logo and title
                     ft.Row([
-                        ft.Icon(ft.Icons.LOCAL_HOSPITAL, color=ft.Colors.BLUE_700, size=28),
-                        ft.Text("DocAssist EMR", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
-                    ], spacing=10),
+                        ft.Container(
+                            content=ft.Icon(
+                                ft.Icons.LOCAL_HOSPITAL,
+                                color=Colors.PRIMARY_500,
+                                size=24,
+                            ),
+                            padding=Spacing.XS,
+                            border_radius=Radius.SM,
+                            bgcolor=Colors.PRIMARY_50,
+                        ),
+                        ft.Text(
+                            "DocAssist",
+                            size=Typography.HEADLINE_MEDIUM.size,
+                            weight=ft.FontWeight.W_600,
+                            color=Colors.NEUTRAL_900,
+                        ),
+                        ft.Text(
+                            "EMR",
+                            size=Typography.HEADLINE_MEDIUM.size,
+                            weight=ft.FontWeight.W_300,
+                            color=Colors.NEUTRAL_500,
+                        ),
+                    ], spacing=Spacing.SM),
+
+                    # Right side: status and actions
                     ft.Row([
-                        self.status_bar,
+                        # Status indicator
+                        ft.Container(
+                            content=self.status_bar,
+                            padding=ft.padding.symmetric(
+                                horizontal=Spacing.SM,
+                                vertical=Spacing.XXS
+                            ),
+                            border_radius=Radius.SM,
+                            bgcolor=Colors.NEUTRAL_100,
+                        ),
+
+                        # Action buttons with premium styling
                         ft.IconButton(
-                            icon=ft.Icons.BACKUP,
+                            icon=ft.Icons.BACKUP_OUTLINED,
+                            icon_color=Colors.NEUTRAL_600,
+                            icon_size=20,
                             tooltip="Backup & Restore",
-                            on_click=self._on_backup_click
+                            on_click=self._on_backup_click,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=Radius.SM),
+                                overlay_color=Colors.HOVER_OVERLAY,
+                            ),
                         ),
                         ft.IconButton(
-                            icon=ft.Icons.SETTINGS,
+                            icon=ft.Icons.SETTINGS_OUTLINED,
+                            icon_color=Colors.NEUTRAL_600,
+                            icon_size=20,
                             tooltip="Settings",
-                            on_click=self._on_settings_click
+                            on_click=self._on_settings_click,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=Radius.SM),
+                                overlay_color=Colors.HOVER_OVERLAY,
+                            ),
                         ),
                         ft.IconButton(
                             icon=ft.Icons.HELP_OUTLINE,
+                            icon_color=Colors.NEUTRAL_600,
+                            icon_size=20,
                             tooltip="Help",
-                            on_click=self._on_help_click
+                            on_click=self._on_help_click,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=Radius.SM),
+                                overlay_color=Colors.HOVER_OVERLAY,
+                            ),
                         ),
-                    ], spacing=5),
+                    ], spacing=Spacing.XXS),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            padding=ft.padding.symmetric(horizontal=20, vertical=10),
-            bgcolor=ft.Colors.WHITE,
-            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300)),
+            padding=ft.padding.symmetric(
+                horizontal=Spacing.LG,
+                vertical=Spacing.SM
+            ),
+            bgcolor=colors['header_bg'],
+            border=ft.border.only(
+                bottom=ft.BorderSide(1, colors['header_border'])
+            ),
+            shadow=ft.BoxShadow(
+                blur_radius=8,
+                spread_radius=0,
+                offset=ft.Offset(0, 2),
+                color="rgba(0,0,0,0.04)",
+            ),
         )
 
-        # Main content with 3 panels
+        # Main content with premium 3-panel layout
         main_content = ft.Row(
             [
                 # Left panel - Patients (fixed width)
                 ft.Container(
                     content=self.patient_panel.build(),
                     width=280,
-                    bgcolor=ft.Colors.GREY_50,
-                    border=ft.border.only(right=ft.BorderSide(1, ft.Colors.GREY_300)),
+                    bgcolor=colors['patient_panel_bg'],
+                    border=ft.border.only(
+                        right=ft.BorderSide(1, colors['patient_panel_border'])
+                    ),
                 ),
                 # Center panel - Main content (expandable)
                 ft.Container(
                     content=self.central_panel.build(),
                     expand=True,
-                    bgcolor=ft.Colors.WHITE,
+                    bgcolor=colors['central_panel_bg'],
                 ),
                 # Right panel - AI Agent (fixed width)
                 ft.Container(
                     content=self.agent_panel.build(),
                     width=350,
-                    bgcolor=ft.Colors.BLUE_50,
-                    border=ft.border.only(left=ft.BorderSide(1, ft.Colors.GREY_300)),
+                    bgcolor=colors['agent_panel_bg'],
+                    border=ft.border.only(
+                        left=ft.BorderSide(1, colors['divider'])
+                    ),
                 ),
             ],
             spacing=0,
@@ -188,21 +285,22 @@ class DocAssistApp:
                 if self.llm.is_available():
                     model_info = self.llm.get_model_info()
                     logger.info(f"LLM available: {model_info['model']}, RAM: {model_info['ram_gb']:.1f}GB")
-                    self._update_status(f"LLM: {model_info['model']} | RAM: {model_info['ram_gb']:.1f}GB")
+                    self._update_status(f"AI: {model_info['model']} | {model_info['ram_gb']:.1f}GB")
                 else:
                     logger.warning("Ollama not running - AI features disabled")
-                    self._update_status("Ollama not running - AI features disabled", error=True)
+                    self._update_status("Ollama not running", error=True)
             except Exception as e:
                 logger.error(f"Error checking LLM status: {e}", exc_info=True)
-                self._update_status("Error checking LLM status", error=True)
+                self._update_status("LLM error", error=True)
 
         threading.Thread(target=check, daemon=True).start()
 
     def _update_status(self, message: str, error: bool = False):
-        """Update status bar."""
+        """Update status bar with premium styling."""
         if self.status_bar and self.page:
+            colors = self._get_colors()
             self.status_bar.value = message
-            self.status_bar.color = ft.Colors.RED_600 if error else ft.Colors.GREY_600
+            self.status_bar.color = colors['status_error'] if error else colors['status_text']
             self.page.update()
 
     def _load_patients(self):
@@ -230,12 +328,10 @@ class DocAssistApp:
         """Index patient documents for RAG in background."""
         def index():
             try:
-                # Get patient summary
                 summary = self.db.get_patient_summary(patient_id)
                 if summary:
                     self.rag.index_patient_summary(patient_id, summary)
 
-                # Get all documents
                 documents = self.db.get_patient_documents_for_rag(patient_id)
                 if documents:
                     self.rag.index_patient_documents(patient_id, documents)
@@ -253,10 +349,8 @@ class DocAssistApp:
                 return
 
             logger.debug(f"Searching patients with query: {query}")
-            # First try basic search
             patients = self.db.search_patients_basic(query)
 
-            # If no results and query looks like natural language, try RAG search
             if not patients and len(query.split()) > 2:
                 results = self.rag.search_patients(query, n_results=10)
                 if results:
@@ -267,7 +361,7 @@ class DocAssistApp:
             logger.info(f"Patient search returned {len(patients)} results")
         except Exception as e:
             logger.error(f"Error during patient search: {e}", exc_info=True)
-            self._update_status("Error searching patients", error=True)
+            self._update_status("Search error", error=True)
 
     def _on_new_patient(self, patient_data: dict):
         """Handle new patient creation."""
@@ -276,7 +370,6 @@ class DocAssistApp:
             saved_patient = self.db.add_patient(patient)
             logger.info(f"Created new patient: {saved_patient.name} (ID: {saved_patient.id})")
 
-            # Index for RAG
             summary = f"Patient: {saved_patient.name}. UHID: {saved_patient.uhid}"
             if saved_patient.age:
                 summary += f". Age: {saved_patient.age}"
@@ -286,10 +379,10 @@ class DocAssistApp:
 
             self._load_patients()
             self._on_patient_selected(saved_patient)
-            self._update_status(f"Created patient: {saved_patient.name}")
+            self._update_status(f"Created: {saved_patient.name}")
         except Exception as e:
             logger.error(f"Error creating new patient: {e}", exc_info=True)
-            self._update_status("Error creating patient", error=True)
+            self._update_status("Creation error", error=True)
 
     def _on_generate_prescription(self, clinical_notes: str, callback):
         """Handle prescription generation."""
@@ -298,7 +391,7 @@ class DocAssistApp:
             callback(False, None, "Ollama is not running. Please start Ollama first.")
             return
 
-        self._update_status("Generating prescription...")
+        self._update_status("Generating Rx...")
         logger.debug("Starting prescription generation")
 
         def generate():
@@ -311,13 +404,13 @@ class DocAssistApp:
                 if self.page:
                     self.page.run_thread_safe(lambda: callback(success, prescription, raw))
                     self.page.run_thread_safe(lambda: self._update_status(
-                        "Prescription generated" if success else f"Error: {raw[:50]}"
+                        "Rx generated" if success else "Rx error", error=not success
                     ))
             except Exception as e:
                 logger.error(f"Error during prescription generation: {e}", exc_info=True)
                 if self.page:
                     self.page.run_thread_safe(lambda: callback(False, None, str(e)))
-                    self.page.run_thread_safe(lambda: self._update_status("Error generating prescription", error=True))
+                    self.page.run_thread_safe(lambda: self._update_status("Rx error", error=True))
 
         threading.Thread(target=generate, daemon=True).start()
 
@@ -328,21 +421,16 @@ class DocAssistApp:
             return False
 
         try:
-            visit = Visit(
-                patient_id=self.current_patient.id,
-                **visit_data
-            )
+            visit = Visit(patient_id=self.current_patient.id, **visit_data)
             saved_visit = self.db.add_visit(visit)
             logger.info(f"Visit saved for patient {self.current_patient.id} (Visit ID: {saved_visit.id})")
 
-            # Reindex patient for RAG
             self._index_patient_for_rag(self.current_patient.id)
-
-            self._update_status(f"Visit saved for {self.current_patient.name}")
+            self._update_status(f"Saved visit for {self.current_patient.name}")
             return True
         except Exception as e:
             logger.error(f"Error saving visit: {e}", exc_info=True)
-            self._update_status("Error saving visit", error=True)
+            self._update_status("Save error", error=True)
             return False
 
     def _on_print_pdf(self, prescription: Prescription, chief_complaint: str) -> Optional[str]:
@@ -356,20 +444,20 @@ class DocAssistApp:
                 patient=self.current_patient,
                 prescription=prescription,
                 chief_complaint=chief_complaint,
-                doctor_name="Dr. ",  # TODO: Get from settings
+                doctor_name="Dr. ",
                 clinic_name="",
                 clinic_address=""
             )
 
             if filepath:
                 logger.info(f"PDF generated: {filepath}")
-                self._update_status(f"PDF saved: {filepath}")
+                self._update_status("PDF saved")
             else:
                 logger.warning("PDF generation returned no filepath")
             return filepath
         except Exception as e:
             logger.error(f"Error generating PDF: {e}", exc_info=True)
-            self._update_status("Error generating PDF", error=True)
+            self._update_status("PDF error", error=True)
             return None
 
     def _on_rag_query(self, question: str, callback):
@@ -384,19 +472,16 @@ class DocAssistApp:
             callback(False, "Ollama is not running. Please start Ollama first.")
             return
 
-        self._update_status("Searching patient records...")
+        self._update_status("Searching...")
         logger.debug(f"RAG query for patient {self.current_patient.id}: {question}")
 
         def query():
             try:
-                # Get relevant context
                 context = self.rag.query_patient_context(
                     patient_id=self.current_patient.id,
                     query=question,
                     n_results=5
                 )
-
-                # Generate answer
                 success, answer = self.llm.query_patient_records(context, question)
 
                 if success:
@@ -406,7 +491,7 @@ class DocAssistApp:
 
                 if self.page:
                     self.page.run_thread_safe(lambda: callback(success, answer))
-                    self.page.run_thread_safe(lambda: self._update_status("Query complete"))
+                    self.page.run_thread_safe(lambda: self._update_status("Ready"))
             except Exception as e:
                 logger.error(f"Error during RAG query: {e}", exc_info=True)
                 if self.page:
@@ -420,50 +505,130 @@ class DocAssistApp:
         show_backup_dialog(self.page, self.backup, self.scheduler, self.settings)
 
     def _on_settings_click(self, e):
-        """Handle settings click."""
+        """Handle settings click with premium dialog."""
+        colors = self._get_colors()
         model_info = self.llm.get_model_info()
 
         dialog = ft.AlertDialog(
-            title=ft.Text("Settings"),
-            content=ft.Column([
-                ft.Text(f"Model: {model_info['model']}", size=14),
-                ft.Text(f"System RAM: {model_info['ram_gb']:.1f} GB", size=14),
-                ft.Text(f"Ollama Status: {'Connected' if model_info['ollama_available'] else 'Not Running'}", size=14),
-                ft.Divider(),
-                ft.Text("To change models or configure Ollama,", size=12),
-                ft.Text("edit the model selection in src/services/llm.py", size=12),
-            ], tight=True, spacing=10),
+            title=ft.Text(
+                "Settings",
+                size=Typography.HEADLINE_SMALL.size,
+                weight=ft.FontWeight.W_500,
+            ),
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text(
+                        f"Model: {model_info['model']}",
+                        size=Typography.BODY_MEDIUM.size,
+                    ),
+                    ft.Text(
+                        f"System RAM: {model_info['ram_gb']:.1f} GB",
+                        size=Typography.BODY_MEDIUM.size,
+                    ),
+                    ft.Text(
+                        f"Ollama: {'Connected' if model_info['ollama_available'] else 'Not Running'}",
+                        size=Typography.BODY_MEDIUM.size,
+                        color=Colors.SUCCESS_MAIN if model_info['ollama_available'] else Colors.ERROR_MAIN,
+                    ),
+                    ft.Divider(height=Spacing.MD),
+                    ft.Text(
+                        "Model configuration is in src/services/llm.py",
+                        size=Typography.BODY_SMALL.size,
+                        color=colors['text_secondary'],
+                    ),
+                ], tight=True, spacing=Spacing.SM),
+                padding=Spacing.SM,
+            ),
             actions=[
-                ft.TextButton("Close", on_click=lambda e: self._close_dialog(dialog)),
+                ft.TextButton(
+                    "Close",
+                    on_click=lambda e: self._close_dialog(dialog),
+                    style=get_button_style("ghost"),
+                ),
             ],
+            shape=ft.RoundedRectangleBorder(radius=Radius.DIALOG),
         )
         self.page.overlay.append(dialog)
         dialog.open = True
         self.page.update()
 
     def _on_help_click(self, e):
-        """Handle help click."""
+        """Handle help click with premium dialog."""
+        colors = self._get_colors()
+
         dialog = ft.AlertDialog(
-            title=ft.Text("DocAssist EMR - Help"),
-            content=ft.Column([
-                ft.Text("Quick Start:", weight=ft.FontWeight.BOLD),
-                ft.Text("1. Add a patient using the + button", size=12),
-                ft.Text("2. Select a patient from the list", size=12),
-                ft.Text("3. Enter clinical notes in the center panel", size=12),
-                ft.Text("4. Click 'Generate Rx' to create prescription", size=12),
-                ft.Text("5. Save and print as PDF", size=12),
-                ft.Divider(),
-                ft.Text("AI Assistant:", weight=ft.FontWeight.BOLD),
-                ft.Text("Ask questions about the patient's history", size=12),
-                ft.Text("Example: 'What was his last creatinine?'", size=12),
-                ft.Divider(),
-                ft.Text("Search:", weight=ft.FontWeight.BOLD),
-                ft.Text("Search patients by name or natural language", size=12),
-                ft.Text("Example: 'Ram who had PCI to LAD'", size=12),
-            ], tight=True, spacing=5, scroll=ft.ScrollMode.AUTO),
+            title=ft.Text(
+                "Quick Start Guide",
+                size=Typography.HEADLINE_SMALL.size,
+                weight=ft.FontWeight.W_500,
+            ),
+            content=ft.Container(
+                content=ft.Column([
+                    # Getting Started
+                    ft.Text(
+                        "Getting Started",
+                        weight=ft.FontWeight.W_600,
+                        size=Typography.TITLE_SMALL.size,
+                    ),
+                    ft.Text("1. Add a patient using the + button", size=Typography.BODY_SMALL.size),
+                    ft.Text("2. Select a patient from the list", size=Typography.BODY_SMALL.size),
+                    ft.Text("3. Enter clinical notes in the center panel", size=Typography.BODY_SMALL.size),
+                    ft.Text("4. Click 'Generate Rx' to create prescription", size=Typography.BODY_SMALL.size),
+                    ft.Text("5. Save and print as PDF", size=Typography.BODY_SMALL.size),
+
+                    ft.Divider(height=Spacing.MD),
+
+                    # AI Assistant
+                    ft.Text(
+                        "AI Assistant",
+                        weight=ft.FontWeight.W_600,
+                        size=Typography.TITLE_SMALL.size,
+                    ),
+                    ft.Text(
+                        "Ask questions about patient history",
+                        size=Typography.BODY_SMALL.size,
+                    ),
+                    ft.Container(
+                        content=ft.Text(
+                            '"What was his last creatinine?"',
+                            size=Typography.BODY_SMALL.size,
+                            italic=True,
+                        ),
+                        padding=ft.padding.only(left=Spacing.SM),
+                    ),
+
+                    ft.Divider(height=Spacing.MD),
+
+                    # Search
+                    ft.Text(
+                        "Smart Search",
+                        weight=ft.FontWeight.W_600,
+                        size=Typography.TITLE_SMALL.size,
+                    ),
+                    ft.Text(
+                        "Search by name or natural language",
+                        size=Typography.BODY_SMALL.size,
+                    ),
+                    ft.Container(
+                        content=ft.Text(
+                            '"Ram who had PCI to LAD"',
+                            size=Typography.BODY_SMALL.size,
+                            italic=True,
+                        ),
+                        padding=ft.padding.only(left=Spacing.SM),
+                    ),
+                ], tight=True, spacing=Spacing.XS, scroll=ft.ScrollMode.AUTO),
+                padding=Spacing.SM,
+                width=320,
+            ),
             actions=[
-                ft.TextButton("Close", on_click=lambda e: self._close_dialog(dialog)),
+                ft.TextButton(
+                    "Got it",
+                    on_click=lambda e: self._close_dialog(dialog),
+                    style=get_button_style("primary"),
+                ),
             ],
+            shape=ft.RoundedRectangleBorder(radius=Radius.DIALOG),
         )
         self.page.overlay.append(dialog)
         dialog.open = True
@@ -477,9 +642,7 @@ class DocAssistApp:
     def _on_app_close(self, e):
         """Handle app close event."""
         if self.scheduler:
-            # Perform backup on close if enabled
             self.scheduler.backup_on_close()
-            # Stop the scheduler
             self.scheduler.stop()
 
 
