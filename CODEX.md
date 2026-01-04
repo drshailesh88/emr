@@ -1,11 +1,15 @@
 # DocAssist EMR - Codex Instructions
 
+> **⚠️ CONTEXT RESET REMINDER**: When your context resets, immediately re-read the **Development Toolkit (MANDATORY)** section below. Use Spec-Kit for planning and Ralph Wiggum for iterative development.
+
 Use this file as the primary project guide when working as Codex.
 If multiple agent instruction files exist, keep them aligned.
 
 ## Purpose
 Local-first EMR for Indian doctors that runs entirely offline with a local LLM.
 Core differentiator: natural language search and RAG on patient records.
+
+**Goal**: Change the practice of a million doctors from pen-and-paper to digital EMR by making adoption frictionless and the experience premium.
 
 ## Instruction Sync
 - Any change to project instructions must be replicated across `CLAUDE.md`, `AGENTS.md`, `CODEX.md`, `GEMINI.md`, and `GROK.md`.
@@ -106,18 +110,20 @@ right AI assistant for RAG queries.
 
 ## Development Toolkit (MANDATORY)
 
-**IMPORTANT**: Always use these tools for complex development tasks.
+> **🔴 CRITICAL**: These tools are REQUIRED for all complex development. If you're about to implement a feature, refactor code, or fix bugs — STOP and use these tools first.
 
 ### Spec-Kit (Specification-Driven Development)
 - Source: https://github.com/github/spec-kit
 - Install: `uvx specify` or `uv tool install specify`
 - Commands: `/speckit.constitution`, `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`
 - When to use: New features, major refactors, unclear requirements
+- Workflow: Always run `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` before coding
 
 ### Ralph Wiggum (Iterative Loop Development)
 - Source: https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum
 - Commands: `/ralph-loop "<prompt>" --max-iterations <n> --completion-promise "<text>"`, `/cancel-ralph`
 - When to use: TDD cycles, bug fixing loops, iterative refinement
+- Example: `/ralph-loop "fix all type errors" --max-iterations 10 --completion-promise "0 errors"`
 
 ## Cloud Backup Strategy (E2E Encrypted)
 
@@ -131,3 +137,37 @@ Implementation modules:
 - src/services/backup.py — Backup creation, encryption, chunking
 - src/services/crypto.py — PyNaCl encryption, Argon2 key derivation
 - src/services/sync.py — Cloud upload/download, conflict resolution
+
+## Mobile App Strategy (DocAssist Mobile)
+
+### Tiered Privacy Model
+| Tier | Name | LLM Location | Privacy Level |
+|------|------|--------------|---------------|
+| 1 | Mobile Lite | None | Maximum (view-only) |
+| 2 | Mobile Pro | On-device (Gemma 2B) | High (full offline) |
+| 3 | Mobile Cloud | Cloud API (opt-in) | Moderate (explicit consent) |
+
+### MVP (Mobile Lite)
+- View patient records synced via E2E encrypted backup
+- Quick patient search (local SQLite)
+- Add appointments, view schedule
+- No LLM — all AI features require desktop
+- Maximum privacy
+
+### Tech Stack
+- Framework: Flet (same as desktop, compiles to iOS/Android)
+- Database: SQLite (local, synced from desktop)
+- Sync: E2E encrypted cloud backup (already implemented)
+
+### Development Phases
+1. Mobile Lite MVP (view-only, sync)
+2. Edit capabilities (add visits)
+3. On-device LLM (Tier 2)
+4. Cloud LLM option (Tier 3)
+
+### Premium UX Principles
+- 60fps animations, no jank
+- Touch targets 48px minimum
+- Works on ₹10K phones
+- Offline-first
+- AMOLED dark mode
