@@ -8,6 +8,9 @@ import flet as ft
 from typing import Callable, Optional
 
 from ..tokens import Colors, MobileSpacing, MobileTypography, Radius
+from ..animations import Animations
+from ..haptics import HapticFeedback
+from ...services.biometric_service import get_biometric_icon
 
 
 class LoginScreen(ft.Container):
@@ -23,9 +26,19 @@ class LoginScreen(ft.Container):
         self,
         on_login: Callable[[str, str], None],
         on_forgot_password: Optional[Callable] = None,
+        on_enable_biometric: Optional[Callable[[bool], None]] = None,
+        biometric_available: bool = False,
+        biometric_type: str = "fingerprint",  # "face_id" or "fingerprint"
+        show_biometric_toggle: bool = False,
+        haptic_feedback: Optional[HapticFeedback] = None,
     ):
         self.on_login = on_login
         self.on_forgot_password = on_forgot_password
+        self.on_enable_biometric = on_enable_biometric
+        self.biometric_available = biometric_available
+        self.biometric_type = biometric_type
+        self.show_biometric_toggle = show_biometric_toggle
+        self.haptic_feedback = haptic_feedback
 
         # Form fields
         self.email_field = ft.TextField(
@@ -73,28 +86,97 @@ class LoginScreen(ft.Container):
             visible=False,
         )
 
+        # Biometric toggle (shown after first successful login)
+        biometric_icon = get_biometric_icon(biometric_type)
+        biometric_display_name = "Face ID" if biometric_type == "face_id" else "Fingerprint"
+
+        self.biometric_toggle = ft.Container(
+            content=ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            biometric_icon,
+                            color=Colors.PRIMARY_500,
+                            size=24,
+                        ),
+                        ft.Container(width=MobileSpacing.SM),
+                        ft.Column(
+                            [
+                                ft.Text(
+                                    f"Enable {biometric_display_name}",
+                                    size=MobileTypography.BODY_LARGE,
+                                    color=Colors.NEUTRAL_900,
+                                    weight=ft.FontWeight.W_500,
+                                ),
+                                ft.Text(
+                                    f"Use {biometric_display_name} to unlock next time",
+                                    size=MobileTypography.BODY_SMALL,
+                                    color=Colors.NEUTRAL_600,
+                                ),
+                            ],
+                            spacing=2,
+                            expand=True,
+                        ),
+                        ft.Switch(
+                            value=False,
+                            on_change=self._handle_biometric_toggle,
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                bgcolor=Colors.PRIMARY_50,
+                padding=MobileSpacing.MD,
+                border_radius=Radius.CARD,
+                border=ft.border.all(1, Colors.PRIMARY_200),
+            ),
+            visible=show_biometric_toggle and biometric_available,
+            animate_opacity=Animations.fade_in(),
+            opacity=0 if show_biometric_toggle else 1,
+        )
+
+        # Logo with animation
+        self.logo_icon = ft.Container(
+            content=ft.Icon(
+                ft.Icons.LOCAL_HOSPITAL,
+                size=64,
+                color=Colors.PRIMARY_500,
+            ),
+            animate_scale=Animations.scale_in(),
+            animate_opacity=Animations.fade_in(),
+            scale=0.5,
+            opacity=0,
+        )
+
+        self.title_text = ft.Container(
+            content=ft.Text(
+                "DocAssist",
+                size=MobileTypography.DISPLAY_LARGE,
+                weight=ft.FontWeight.W_300,
+                color=Colors.NEUTRAL_900,
+            ),
+            animate_opacity=Animations.fade_in(),
+            opacity=0,
+        )
+
+        self.subtitle_text = ft.Container(
+            content=ft.Text(
+                "Your clinic in your pocket",
+                size=MobileTypography.BODY_MEDIUM,
+                color=Colors.NEUTRAL_600,
+            ),
+            animate_opacity=Animations.fade_in(),
+            opacity=0,
+        )
+
         # Build content
         content = ft.Column(
             [
                 # Logo section
                 ft.Container(height=60),
-                ft.Icon(
-                    ft.Icons.LOCAL_HOSPITAL,
-                    size=64,
-                    color=Colors.PRIMARY_500,
-                ),
+                self.logo_icon,
                 ft.Container(height=MobileSpacing.MD),
-                ft.Text(
-                    "DocAssist",
-                    size=MobileTypography.DISPLAY_LARGE,
-                    weight=ft.FontWeight.W_300,
-                    color=Colors.NEUTRAL_900,
-                ),
-                ft.Text(
-                    "Your clinic in your pocket",
-                    size=MobileTypography.BODY_MEDIUM,
-                    color=Colors.NEUTRAL_600,
-                ),
+                self.title_text,
+                self.subtitle_text,
                 ft.Container(height=MobileSpacing.XXL),
 
                 # Form section
@@ -117,6 +199,8 @@ class LoginScreen(ft.Container):
                                     ),
                                 ],
                             ),
+                            ft.Container(height=MobileSpacing.LG),
+                            self.biometric_toggle,
                             ft.Container(height=MobileSpacing.MD),
                             ft.TextButton(
                                 text="Forgot password?",
@@ -199,6 +283,18 @@ class LoginScreen(ft.Container):
         if self.on_forgot_password:
             self.on_forgot_password()
 
+    def _handle_biometric_toggle(self, e):
+        """Handle biometric toggle change."""
+        enabled = e.control.value
+
+        # Trigger haptic feedback
+        if self.haptic_feedback:
+            self.haptic_feedback.selection()
+
+        # Call handler
+        if self.on_enable_biometric:
+            self.on_enable_biometric(enabled)
+
     def _show_error(self, message: str):
         """Show error message."""
         self.error_text.value = message
@@ -230,3 +326,38 @@ class LoginScreen(ft.Container):
         self._hide_error()
         self._set_loading(False)
         self.update()
+
+    def show_biometric_toggle(self):
+        """Show biometric toggle after successful login."""
+        if self.biometric_available and not self.biometric_toggle.visible:
+            self.biometric_toggle.visible = True
+            self.biometric_toggle.opacity = 1.0
+            self.biometric_toggle.update()
+
+    def hide_biometric_toggle(self):
+        """Hide biometric toggle."""
+        if self.biometric_toggle.visible:
+            self.biometric_toggle.opacity = 0
+            self.biometric_toggle.update()
+            import time
+            time.sleep(0.25)
+            self.biometric_toggle.visible = False
+            self.biometric_toggle.update()
+
+    def animate_in(self):
+        """Trigger entrance animations."""
+        # Animate logo
+        self.logo_icon.scale = 1.0
+        self.logo_icon.opacity = 1.0
+        self.logo_icon.update()
+
+        # Animate title (delayed)
+        import time
+        time.sleep(0.1)
+        self.title_text.opacity = 1.0
+        self.title_text.update()
+
+        # Animate subtitle (delayed)
+        time.sleep(0.05)
+        self.subtitle_text.opacity = 1.0
+        self.subtitle_text.update()

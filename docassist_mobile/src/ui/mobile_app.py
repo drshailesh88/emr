@@ -6,19 +6,41 @@ Provides view-only access to patient records with sync from desktop.
 """
 
 import flet as ft
+import threading
+import os
 from typing import Optional
 from enum import Enum
+from datetime import datetime
 
 from .tokens import Colors, MobileSpacing, MobileTypography, Radius
+from .screens.login_screen import LoginScreen
+from .screens.home_screen import HomeScreen, AppointmentData
+from .screens.patient_list import PatientListScreen, PatientData
+from .screens.patient_detail import PatientDetailScreen, PatientInfo, VisitData, LabData, ProcedureData
+from .screens.settings_screen import SettingsScreen
+from .screens.add_patient_screen import AddPatientScreen
+from .screens.onboarding_screen import OnboardingScreen
+from .screens.welcome_back_screen import WelcomeBackScreen
+
+from .components.floating_action_button import FloatingActionButton, FABAction
+from .haptics import HapticFeedback
+
+from ..services.auth_service import AuthService
+from ..services.sync_client import SyncClient, SyncStatus
+from ..services.local_db import LocalDatabase
+from ..services.preferences_service import PreferencesService, get_preferences
 
 
 class Screen(Enum):
     """Available screens in the app."""
+    ONBOARDING = "onboarding"
+    WELCOME_BACK = "welcome_back"
     LOGIN = "login"
     HOME = "home"
     PATIENTS = "patients"
     PATIENT_DETAIL = "patient_detail"
     SETTINGS = "settings"
+    ADD_PATIENT = "add_patient"
 
 
 class DocAssistMobile:
@@ -28,15 +50,35 @@ class DocAssistMobile:
         self.page = page
         self.current_screen: Screen = Screen.LOGIN
         self.selected_patient_id: Optional[int] = None
-        self.is_authenticated: bool = False
-        self.is_dark_mode: bool = False
 
-        # Services (initialized after auth)
-        self.local_db = None
-        self.sync_client = None
+        # Services
+        self.auth_service = AuthService()
+        self.sync_client = SyncClient(data_dir="data")
+        self.local_db = None  # Initialized after first sync
+        self.preferences = get_preferences(data_dir="data")
+
+        # Screen instances
+        self.onboarding_screen_widget: Optional[OnboardingScreen] = None
+        self.welcome_back_screen_widget: Optional[WelcomeBackScreen] = None
+        self.login_screen_widget: Optional[LoginScreen] = None
+        self.home_screen_widget: Optional[HomeScreen] = None
+        self.patient_list_screen_widget: Optional[PatientListScreen] = None
+        self.patient_detail_screen_widget: Optional[PatientDetailScreen] = None
+        self.settings_screen_widget: Optional[SettingsScreen] = None
+        self.add_patient_screen_widget: Optional[AddPatientScreen] = None
+
+        # UI state
+        self.is_dark_mode: bool = False
+        self.content_area: Optional[ft.Container] = None
+        self.bottom_nav: Optional[ft.NavigationBar] = None
+        self.fab: Optional[FloatingActionButton] = None
+        self.haptics: Optional[HapticFeedback] = None
 
         # Configure page
         self._configure_page()
+
+        # Setup sync callback
+        self.sync_client.set_status_callback(self._on_sync_status_change)
 
     def _configure_page(self):
         """Configure page settings for mobile."""
@@ -74,107 +116,158 @@ class DocAssistMobile:
 
     def build(self):
         """Build the main app UI."""
-        # Start with login or home based on auth state
-        if self.is_authenticated:
-            self._show_main_app()
+        # Initialize haptics early
+        self.haptics = HapticFeedback(self.page)
+
+        # Check if user has completed onboarding
+        if not self.preferences.has_seen_onboarding():
+            # First-time user: show onboarding
+            self._show_onboarding()
+        elif self.auth_service.is_authenticated():
+            # Returning user: show welcome back screen
+            self._show_welcome_back()
         else:
+            # User has seen onboarding but not logged in: show login
             self._show_login()
+
+    def _on_sync_status_change(self, sync_state):
+        """Handle sync status changes."""
+        # Update UI when sync status changes
+        if self.home_screen_widget:
+            status_text = "synced" if sync_state.status == SyncStatus.SUCCESS else "syncing"
+            self.home_screen_widget.update_sync_status(
+                status_text,
+                self.sync_client.get_last_sync_text()
+            )
+
+    def _initialize_database(self):
+        """Initialize local database connection."""
+        try:
+            db_path = os.path.join(self.sync_client.data_dir, "clinic.db")
+            self.local_db = LocalDatabase(db_path)
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            # Database doesn't exist yet, will be created after first sync
+
+    def _show_onboarding(self):
+        """Show onboarding screen for first-time users."""
+        self.page.controls.clear()
+        self.current_screen = Screen.ONBOARDING
+
+        self.onboarding_screen_widget = OnboardingScreen(
+            on_complete=self._handle_onboarding_complete,
+            haptics=self.haptics,
+        )
+
+        self.page.add(self.onboarding_screen_widget)
+        self.page.update()
+
+    def _handle_onboarding_complete(self):
+        """Handle onboarding completion."""
+        # Mark onboarding as complete
+        self.preferences.set_onboarding_complete()
+
+        # Show login screen
+        self._show_login()
+
+    def _show_welcome_back(self):
+        """Show welcome back screen for returning users."""
+        self.page.controls.clear()
+        self.current_screen = Screen.WELCOME_BACK
+
+        # Get user info
+        user_name, user_email = self.auth_service.get_user_info()
+
+        # Initialize database for stats
+        self._initialize_database()
+
+        # Get today's appointment count
+        appointments_today = 0
+        if self.local_db:
+            try:
+                appointments = self.local_db.get_todays_appointments()
+                appointments_today = len(appointments)
+            except:
+                pass
+
+        # Check if biometrics enabled
+        biometrics_enabled = self.preferences.get_biometrics_enabled()
+
+        self.welcome_back_screen_widget = WelcomeBackScreen(
+            user_name=user_name or "Doctor",
+            last_sync=self.sync_client.get_last_sync_text(),
+            appointments_today=appointments_today,
+            on_continue=self._handle_welcome_continue,
+            biometrics_enabled=biometrics_enabled,
+            haptics=self.haptics,
+        )
+
+        self.page.add(self.welcome_back_screen_widget)
+        self.page.update()
+
+    def _handle_welcome_continue(self):
+        """Handle continue from welcome back screen."""
+        # Show main app
+        self._show_main_app()
 
     def _show_login(self):
         """Show login screen."""
         self.page.controls.clear()
+        self.current_screen = Screen.LOGIN
 
-        login_view = ft.Container(
-            content=ft.Column(
-                [
-                    # Logo and title
-                    ft.Container(height=80),
-                    ft.Icon(
-                        ft.Icons.LOCAL_HOSPITAL,
-                        size=64,
-                        color=Colors.PRIMARY_500,
-                    ),
-                    ft.Text(
-                        "DocAssist",
-                        size=MobileTypography.DISPLAY_LARGE,
-                        weight=ft.FontWeight.W_300,
-                        color=Colors.NEUTRAL_900,
-                    ),
-                    ft.Text(
-                        "Your clinic in your pocket",
-                        size=MobileTypography.BODY_MEDIUM,
-                        color=Colors.NEUTRAL_600,
-                    ),
-                    ft.Container(height=48),
-
-                    # Login form
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.TextField(
-                                    label="Email",
-                                    prefix_icon=ft.Icons.EMAIL_OUTLINED,
-                                    border_radius=Radius.MD,
-                                    height=56,
-                                ),
-                                ft.Container(height=MobileSpacing.MD),
-                                ft.TextField(
-                                    label="Password",
-                                    prefix_icon=ft.Icons.LOCK_OUTLINED,
-                                    password=True,
-                                    can_reveal_password=True,
-                                    border_radius=Radius.MD,
-                                    height=56,
-                                ),
-                                ft.Container(height=MobileSpacing.LG),
-                                ft.ElevatedButton(
-                                    text="Login",
-                                    width=float("inf"),
-                                    height=MobileSpacing.TOUCH_TARGET,
-                                    style=ft.ButtonStyle(
-                                        bgcolor=Colors.PRIMARY_500,
-                                        color=Colors.NEUTRAL_0,
-                                        shape=ft.RoundedRectangleBorder(
-                                            radius=Radius.BUTTON
-                                        ),
-                                    ),
-                                    on_click=self._handle_login,
-                                ),
-                            ],
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
-                        padding=MobileSpacing.SCREEN_PADDING,
-                    ),
-
-                    ft.Container(expand=True),
-
-                    # Footer
-                    ft.Text(
-                        "Privacy-first. Your data stays yours.",
-                        size=MobileTypography.CAPTION,
-                        color=Colors.NEUTRAL_500,
-                    ),
-                    ft.Container(height=MobileSpacing.LG),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            expand=True,
-            bgcolor=Colors.NEUTRAL_0,
+        self.login_screen_widget = LoginScreen(
+            on_login=self._handle_login,
         )
 
-        self.page.add(login_view)
+        self.page.add(self.login_screen_widget)
         self.page.update()
 
-    def _handle_login(self, e):
-        """Handle login button click."""
-        # TODO: Implement actual authentication
-        # For now, simulate successful login
-        self.is_authenticated = True
-        self._show_main_app()
+    def _handle_login(self, email: str, password: str):
+        """Handle login attempt."""
+        def do_login():
+            # Attempt authentication
+            success = self.auth_service.login(email, password)
+
+            if success:
+                # Set credentials for sync
+                token = self.auth_service.get_token()
+                key = self.auth_service.get_encryption_key()
+                self.sync_client.set_credentials(token, key)
+
+                # Store user name for welcome screen
+                user_name, _ = self.auth_service.get_user_info()
+                if user_name:
+                    self.preferences.set_user_name(user_name)
+
+                # Record last login
+                from datetime import datetime
+                self.preferences.set_last_login(datetime.now().isoformat())
+
+                # Initialize database
+                self._initialize_database()
+
+                # Trigger initial sync in background
+                self.sync_client.sync(background=True)
+
+                # Show main app
+                self.page.run_task(lambda: self._show_main_app())
+            else:
+                # Show error
+                self.page.run_task(
+                    lambda: self.login_screen_widget.show_login_error(
+                        "Invalid email or password"
+                    )
+                )
+
+        # Run login in thread to avoid blocking UI
+        threading.Thread(target=do_login, daemon=True).start()
 
     def _show_main_app(self):
         """Show main app with bottom navigation."""
         self.page.controls.clear()
+
+        # Initialize haptics
+        self.haptics = HapticFeedback(self.page)
 
         # Content area (changes based on selected tab)
         self.content_area = ft.Container(
@@ -208,17 +301,60 @@ class DocAssistMobile:
             on_change=self._on_nav_change,
         )
 
-        # Main layout
-        main_layout = ft.Column(
-            [
-                self.content_area,
-                self.bottom_nav,
+        # Create FAB with quick actions
+        self.fab = FloatingActionButton(
+            actions=[
+                FABAction(
+                    icon=ft.Icons.PERSON_ADD,
+                    label="Add Patient",
+                    on_click=self._show_add_patient_screen,
+                ),
+                FABAction(
+                    icon=ft.Icons.NOTE_ADD,
+                    label="New Visit",
+                    on_click=self._handle_new_visit,
+                ),
+                FABAction(
+                    icon=ft.Icons.SCIENCE,
+                    label="Add Lab Result",
+                    on_click=self._handle_add_lab,
+                ),
+                FABAction(
+                    icon=ft.Icons.CALENDAR_TODAY,
+                    label="Schedule Appointment",
+                    on_click=self._handle_schedule_appointment,
+                ),
             ],
-            spacing=0,
+            page=self.page,
+            haptic_feedback=self.haptics,
+        )
+
+        # Position FAB at bottom-right, above navigation bar
+        fab_container = ft.Container(
+            content=self.fab,
+            right=16,
+            bottom=MobileSpacing.NAV_HEIGHT + 16,  # Above nav bar
+        )
+
+        # Use Stack to layer FAB over content
+        content_with_fab = ft.Stack(
+            [
+                # Main content
+                ft.Column(
+                    [
+                        self.content_area,
+                        self.bottom_nav,
+                    ],
+                    spacing=0,
+                    expand=True,
+                ),
+                # FAB overlay
+                fab_container,
+            ],
             expand=True,
         )
 
-        self.page.add(main_layout)
+        self.page.add(content_with_fab)
 
         # Show home screen by default
         self._show_home_screen()
@@ -233,569 +369,490 @@ class DocAssistMobile:
             self._show_patients_screen()
         elif index == 2:
             self._show_settings_screen()
+
+        # Update FAB visibility
+        self._update_fab_visibility()
         self.page.update()
 
     def _show_home_screen(self):
         """Show home screen with today's appointments."""
         self.current_screen = Screen.HOME
 
-        # Sync indicator
-        sync_status = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.CHECK_CIRCLE, size=16, color=Colors.SUCCESS_MAIN),
-                    ft.Text(
-                        "Synced 5 min ago",
-                        size=MobileTypography.CAPTION,
-                        color=Colors.NEUTRAL_600,
-                    ),
-                ],
-                spacing=MobileSpacing.XXS,
-            ),
-            padding=ft.padding.symmetric(horizontal=MobileSpacing.MD, vertical=MobileSpacing.XS),
+        # Create home screen
+        self.home_screen_widget = HomeScreen(
+            on_appointment_click=self._show_patient_detail,
+            on_patient_click=self._show_patient_detail,
+            on_refresh=self._handle_manual_sync,
+            sync_status="synced" if self.sync_client.state.status == SyncStatus.SUCCESS else "syncing",
+            last_sync=self.sync_client.get_last_sync_text(),
         )
 
-        # Today's appointments section
-        appointments_header = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Text(
-                        "Today's Appointments",
-                        size=MobileTypography.TITLE_MEDIUM,
-                        weight=ft.FontWeight.W_600,
-                        color=Colors.NEUTRAL_900,
-                    ),
-                    ft.Text(
-                        "3 patients",
-                        size=MobileTypography.BODY_SMALL,
-                        color=Colors.NEUTRAL_600,
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            ),
-            padding=MobileSpacing.SCREEN_PADDING,
-        )
+        # Load appointments
+        self._load_appointments()
 
-        # Sample appointment cards
-        appointments = ft.ListView(
-            controls=[
-                self._create_appointment_card("9:00 AM", "Ram Kumar", "Follow-up"),
-                self._create_appointment_card("10:30 AM", "Priya Sharma", "New consultation"),
-                self._create_appointment_card("2:00 PM", "Amit Patel", "Lab review"),
-            ],
-            spacing=MobileSpacing.SM,
-            padding=ft.padding.symmetric(horizontal=MobileSpacing.SCREEN_PADDING),
-            expand=True,
-        )
-
-        # Recent patients section
-        recent_header = ft.Container(
-            content=ft.Text(
-                "Recent Patients",
-                size=MobileTypography.TITLE_MEDIUM,
-                weight=ft.FontWeight.W_600,
-                color=Colors.NEUTRAL_900,
-            ),
-            padding=MobileSpacing.SCREEN_PADDING,
-        )
-
-        home_content = ft.Column(
-            [
-                sync_status,
-                appointments_header,
-                appointments,
-            ],
-            spacing=0,
-            expand=True,
-        )
-
-        self.content_area.content = home_content
+        self.content_area.content = self.home_screen_widget
         self.content_area.update()
 
-    def _create_appointment_card(self, time: str, name: str, reason: str) -> ft.Container:
-        """Create an appointment card."""
-        return ft.Container(
-            content=ft.Row(
-                [
-                    # Time
-                    ft.Container(
-                        content=ft.Text(
-                            time,
-                            size=MobileTypography.BODY_MEDIUM,
-                            weight=ft.FontWeight.W_600,
-                            color=Colors.PRIMARY_500,
-                        ),
-                        width=70,
-                    ),
-                    # Patient info
-                    ft.Column(
-                        [
-                            ft.Text(
-                                name,
-                                size=MobileTypography.BODY_LARGE,
-                                weight=ft.FontWeight.W_500,
-                                color=Colors.NEUTRAL_900,
-                            ),
-                            ft.Text(
-                                reason,
-                                size=MobileTypography.BODY_SMALL,
-                                color=Colors.NEUTRAL_600,
-                            ),
-                        ],
-                        spacing=2,
-                        expand=True,
-                    ),
-                    # Arrow
-                    ft.Icon(
-                        ft.Icons.CHEVRON_RIGHT,
-                        color=Colors.NEUTRAL_400,
-                    ),
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            bgcolor=Colors.NEUTRAL_0,
-            border_radius=Radius.CARD,
-            padding=MobileSpacing.CARD_PADDING,
-            ink=True,
-            on_click=lambda e: self._show_patient_detail(1),  # TODO: pass real ID
-        )
+    def _load_appointments(self):
+        """Load today's appointments from database."""
+        def load():
+            if not self.local_db:
+                return
+
+            try:
+                appointments = self.local_db.get_todays_appointments()
+                appt_data = []
+                for appt in appointments:
+                    # Format time from datetime
+                    time_str = appt.appointment_time.strftime("%I:%M %p")
+                    appt_data.append(AppointmentData(
+                        id=appt.id,
+                        patient_id=appt.patient_id,
+                        patient_name=appt.patient_name,
+                        time=time_str,
+                        reason=appt.reason,
+                    ))
+
+                # Update UI on main thread
+                self.page.run_task(lambda: self.home_screen_widget.set_appointments(appt_data))
+            except Exception as e:
+                print(f"Error loading appointments: {e}")
+
+        threading.Thread(target=load, daemon=True).start()
 
     def _show_patients_screen(self):
         """Show patient list screen."""
         self.current_screen = Screen.PATIENTS
 
-        # Search bar
-        search_bar = ft.Container(
-            content=ft.TextField(
-                hint_text="Search patients...",
-                prefix_icon=ft.Icons.SEARCH,
-                border_radius=Radius.FULL,
-                height=48,
-                bgcolor=Colors.NEUTRAL_0,
-                border_color=Colors.NEUTRAL_200,
-                focused_border_color=Colors.PRIMARY_500,
-            ),
-            padding=MobileSpacing.SCREEN_PADDING,
+        # Create patient list screen
+        self.patient_list_screen_widget = PatientListScreen(
+            on_patient_click=self._show_patient_detail,
+            on_search=self._handle_patient_search,
         )
 
-        # Patient list
-        patients = ft.ListView(
-            controls=[
-                self._create_patient_card("Ram Kumar", "M, 65", "Last visit: 2 days ago"),
-                self._create_patient_card("Priya Sharma", "F, 42", "Last visit: 1 week ago"),
-                self._create_patient_card("Amit Patel", "M, 55", "Last visit: 3 days ago"),
-                self._create_patient_card("Sunita Devi", "F, 38", "Last visit: 2 weeks ago"),
-                self._create_patient_card("Rajesh Singh", "M, 50", "Last visit: 5 days ago"),
-            ],
-            spacing=MobileSpacing.XS,
-            padding=ft.padding.symmetric(horizontal=MobileSpacing.SCREEN_PADDING),
-            expand=True,
-        )
+        # Load patients
+        self._load_patients()
 
-        patients_content = ft.Column(
-            [
-                search_bar,
-                patients,
-            ],
-            spacing=0,
-            expand=True,
-        )
-
-        self.content_area.content = patients_content
+        self.content_area.content = self.patient_list_screen_widget
         self.content_area.update()
 
-    def _create_patient_card(self, name: str, demographics: str, last_visit: str) -> ft.Container:
-        """Create a patient list card."""
-        # Generate initials from name
-        initials = "".join([n[0] for n in name.split()[:2]]).upper()
+    def _load_patients(self, query: str = ""):
+        """Load patients from database."""
+        def load():
+            if not self.local_db:
+                self.page.run_task(lambda: self.patient_list_screen_widget.show_no_data())
+                return
 
-        return ft.Container(
-            content=ft.Row(
-                [
-                    # Avatar
-                    ft.Container(
-                        content=ft.Text(
-                            initials,
-                            size=MobileTypography.BODY_MEDIUM,
-                            weight=ft.FontWeight.W_600,
-                            color=Colors.PRIMARY_500,
-                        ),
-                        width=48,
-                        height=48,
-                        border_radius=Radius.FULL,
-                        bgcolor=Colors.PRIMARY_50,
-                        alignment=ft.alignment.center,
-                    ),
-                    # Patient info
-                    ft.Column(
-                        [
-                            ft.Text(
-                                name,
-                                size=MobileTypography.BODY_LARGE,
-                                weight=ft.FontWeight.W_500,
-                                color=Colors.NEUTRAL_900,
-                            ),
-                            ft.Row(
-                                [
-                                    ft.Text(
-                                        demographics,
-                                        size=MobileTypography.BODY_SMALL,
-                                        color=Colors.NEUTRAL_600,
-                                    ),
-                                    ft.Text(
-                                        "•",
-                                        size=MobileTypography.BODY_SMALL,
-                                        color=Colors.NEUTRAL_400,
-                                    ),
-                                    ft.Text(
-                                        last_visit,
-                                        size=MobileTypography.BODY_SMALL,
-                                        color=Colors.NEUTRAL_500,
-                                    ),
-                                ],
-                                spacing=MobileSpacing.XS,
-                            ),
-                        ],
-                        spacing=2,
-                        expand=True,
-                    ),
-                    # Arrow
-                    ft.Icon(
-                        ft.Icons.CHEVRON_RIGHT,
-                        color=Colors.NEUTRAL_400,
-                    ),
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=MobileSpacing.MD,
-            ),
-            bgcolor=Colors.NEUTRAL_0,
-            border_radius=Radius.CARD,
-            padding=MobileSpacing.CARD_PADDING,
-            ink=True,
-            on_click=lambda e: self._show_patient_detail(1),  # TODO: pass real ID
-        )
+            try:
+                # Show loading
+                self.page.run_task(lambda: self.patient_list_screen_widget.show_loading())
+
+                # Search or get all
+                if query:
+                    patients = self.local_db.search_patients(query)
+                else:
+                    patients = self.local_db.get_all_patients(limit=100)
+
+                # Convert to display data
+                patient_data = []
+                for p in patients:
+                    last_visit = None
+                    if p.last_visit_date:
+                        # Calculate time ago
+                        from datetime import date
+                        delta = date.today() - p.last_visit_date
+                        if delta.days == 0:
+                            last_visit = "Today"
+                        elif delta.days == 1:
+                            last_visit = "Yesterday"
+                        elif delta.days < 7:
+                            last_visit = f"{delta.days} days ago"
+                        elif delta.days < 30:
+                            weeks = delta.days // 7
+                            last_visit = f"{weeks} week{'s' if weeks > 1 else ''} ago"
+                        else:
+                            last_visit = p.last_visit_date.strftime("%b %d, %Y")
+
+                    patient_data.append(PatientData(
+                        id=p.id,
+                        name=p.name,
+                        age=p.age,
+                        gender=p.gender,
+                        phone=p.phone,
+                        last_visit=last_visit,
+                    ))
+
+                # Update UI
+                self.page.run_task(lambda: self.patient_list_screen_widget.set_patients(patient_data))
+            except Exception as e:
+                print(f"Error loading patients: {e}")
+                self.page.run_task(lambda: self.patient_list_screen_widget.show_no_data())
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def _handle_patient_search(self, query: str):
+        """Handle patient search."""
+        self._load_patients(query)
 
     def _show_patient_detail(self, patient_id: int):
         """Show patient detail screen."""
         self.selected_patient_id = patient_id
         self.current_screen = Screen.PATIENT_DETAIL
 
-        # Header with back button
-        header = ft.Container(
-            content=ft.Row(
-                [
-                    ft.IconButton(
-                        icon=ft.Icons.ARROW_BACK,
-                        icon_color=Colors.NEUTRAL_900,
-                        on_click=lambda e: self._go_back(),
-                    ),
-                    ft.Text(
-                        "Patient Details",
-                        size=MobileTypography.TITLE_LARGE,
-                        weight=ft.FontWeight.W_500,
-                        color=Colors.NEUTRAL_900,
-                    ),
-                ],
-            ),
-            bgcolor=Colors.NEUTRAL_0,
-            padding=ft.padding.only(left=MobileSpacing.XS, right=MobileSpacing.MD, top=MobileSpacing.SM, bottom=MobileSpacing.SM),
-        )
+        # Create placeholder screen while loading
+        if not self.local_db:
+            return
 
-        # Patient info card
-        patient_header = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Container(
-                                content=ft.Text(
-                                    "RK",
-                                    size=MobileTypography.HEADLINE_MEDIUM,
-                                    weight=ft.FontWeight.W_600,
-                                    color=Colors.PRIMARY_500,
-                                ),
-                                width=64,
-                                height=64,
-                                border_radius=Radius.FULL,
-                                bgcolor=Colors.PRIMARY_50,
-                                alignment=ft.alignment.center,
-                            ),
-                            ft.Column(
-                                [
-                                    ft.Text(
-                                        "Ram Kumar",
-                                        size=MobileTypography.HEADLINE_MEDIUM,
-                                        weight=ft.FontWeight.W_600,
-                                        color=Colors.NEUTRAL_900,
-                                    ),
-                                    ft.Text(
-                                        "UHID: EMR-2024-0001",
-                                        size=MobileTypography.BODY_SMALL,
-                                        color=Colors.NEUTRAL_600,
-                                    ),
-                                    ft.Text(
-                                        "Male, 65 years • +91 98765 43210",
-                                        size=MobileTypography.BODY_SMALL,
-                                        color=Colors.NEUTRAL_500,
-                                    ),
-                                ],
-                                spacing=4,
-                            ),
-                        ],
-                        spacing=MobileSpacing.MD,
-                    ),
-                    ft.Container(height=MobileSpacing.MD),
-                    # Quick actions
-                    ft.Row(
-                        [
-                            ft.ElevatedButton(
-                                content=ft.Row(
-                                    [
-                                        ft.Icon(ft.Icons.PHONE, size=18),
-                                        ft.Text("Call"),
-                                    ],
-                                    spacing=MobileSpacing.XS,
-                                ),
-                                style=ft.ButtonStyle(
-                                    bgcolor=Colors.PRIMARY_500,
-                                    color=Colors.NEUTRAL_0,
-                                    shape=ft.RoundedRectangleBorder(radius=Radius.BUTTON),
-                                ),
-                                height=40,
-                            ),
-                            ft.OutlinedButton(
-                                content=ft.Row(
-                                    [
-                                        ft.Icon(ft.Icons.SHARE, size=18),
-                                        ft.Text("Share Rx"),
-                                    ],
-                                    spacing=MobileSpacing.XS,
-                                ),
-                                style=ft.ButtonStyle(
-                                    color=Colors.PRIMARY_500,
-                                    shape=ft.RoundedRectangleBorder(radius=Radius.BUTTON),
-                                ),
-                                height=40,
-                            ),
-                        ],
-                        spacing=MobileSpacing.SM,
-                    ),
-                ],
-            ),
-            bgcolor=Colors.NEUTRAL_0,
-            padding=MobileSpacing.SCREEN_PADDING,
-        )
+        def load():
+            try:
+                # Get patient info
+                patient = self.local_db.get_patient(patient_id)
+                if not patient:
+                    print(f"Patient {patient_id} not found")
+                    return
 
-        # Tabs
-        tabs = ft.Tabs(
-            selected_index=0,
-            tabs=[
-                ft.Tab(text="Visits"),
-                ft.Tab(text="Labs"),
-                ft.Tab(text="Procedures"),
-            ],
-            expand=True,
-        )
+                # Create patient info
+                patient_info = PatientInfo(
+                    id=patient.id,
+                    name=patient.name,
+                    uhid=patient.uhid,
+                    age=patient.age,
+                    gender=patient.gender,
+                    phone=patient.phone,
+                    address=patient.address,
+                )
 
-        detail_content = ft.Column(
-            [
-                header,
-                patient_header,
-                ft.Divider(height=1, color=Colors.NEUTRAL_200),
-                tabs,
-            ],
-            spacing=0,
-            expand=True,
-        )
+                # Create detail screen
+                def create_screen():
+                    self.patient_detail_screen_widget = PatientDetailScreen(
+                        patient=patient_info,
+                        on_back=self._go_back,
+                        on_call=self._handle_call,
+                        on_share=self._handle_share_rx,
+                        on_add_appointment=self._handle_add_appointment,
+                    )
 
-        self.content_area.content = detail_content
-        self.content_area.update()
-        self.page.update()
+                    # Load related data
+                    self._load_patient_visits(patient_id)
+                    self._load_patient_labs(patient_id)
+                    self._load_patient_procedures(patient_id)
+
+                    self.content_area.content = self.patient_detail_screen_widget
+                    self.content_area.update()
+
+                self.page.run_task(create_screen)
+
+            except Exception as e:
+                print(f"Error loading patient detail: {e}")
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def _load_patient_visits(self, patient_id: int):
+        """Load patient visits."""
+        def load():
+            try:
+                visits = self.local_db.get_patient_visits(patient_id, limit=20)
+                visit_data = []
+                for v in visits:
+                    visit_data.append(VisitData(
+                        id=v.id,
+                        date=v.visit_date.strftime("%b %d, %Y"),
+                        chief_complaint=v.chief_complaint,
+                        diagnosis=v.diagnosis,
+                        prescription=v.prescription_json,
+                    ))
+
+                self.page.run_task(lambda: self.patient_detail_screen_widget.set_visits(visit_data))
+            except Exception as e:
+                print(f"Error loading visits: {e}")
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def _load_patient_labs(self, patient_id: int):
+        """Load patient lab results."""
+        def load():
+            try:
+                labs = self.local_db.get_patient_investigations(patient_id, limit=50)
+                lab_data = []
+                for lab in labs:
+                    lab_data.append(LabData(
+                        id=lab.id,
+                        test_name=lab.test_name,
+                        result=lab.result or "",
+                        unit=lab.unit,
+                        reference_range=lab.reference_range,
+                        date=lab.test_date.strftime("%b %d, %Y") if lab.test_date else None,
+                        is_abnormal=lab.is_abnormal,
+                    ))
+
+                self.page.run_task(lambda: self.patient_detail_screen_widget.set_labs(lab_data))
+            except Exception as e:
+                print(f"Error loading labs: {e}")
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def _load_patient_procedures(self, patient_id: int):
+        """Load patient procedures."""
+        def load():
+            try:
+                procedures = self.local_db.get_patient_procedures(patient_id, limit=20)
+                proc_data = []
+                for proc in procedures:
+                    proc_data.append(ProcedureData(
+                        id=proc.id,
+                        name=proc.procedure_name,
+                        date=proc.procedure_date.strftime("%b %d, %Y"),
+                        details=proc.details,
+                    ))
+
+                self.page.run_task(lambda: self.patient_detail_screen_widget.set_procedures(proc_data))
+            except Exception as e:
+                print(f"Error loading procedures: {e}")
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def _handle_call(self, phone: str):
+        """Handle call button - open phone dialer."""
+        import webbrowser
+        webbrowser.open(f"tel:{phone}")
+
+    def _handle_share_rx(self, patient_id: int):
+        """Handle share prescription."""
+        # TODO: Implement prescription sharing
+        print(f"Share prescription for patient {patient_id}")
+
+    def _handle_add_appointment(self, patient_id: int):
+        """Handle add appointment."""
+        # TODO: Implement appointment creation
+        print(f"Add appointment for patient {patient_id}")
 
     def _show_settings_screen(self):
         """Show settings screen."""
         self.current_screen = Screen.SETTINGS
 
-        settings_content = ft.Column(
-            [
-                ft.Container(
-                    content=ft.Text(
-                        "Settings",
-                        size=MobileTypography.HEADLINE_LARGE,
-                        weight=ft.FontWeight.W_600,
-                        color=Colors.NEUTRAL_900,
-                    ),
-                    padding=MobileSpacing.SCREEN_PADDING,
-                ),
+        # Get user info
+        user_name, user_email = self.auth_service.get_user_info()
 
-                # Account section
-                self._create_settings_section("Account", [
-                    self._create_settings_item(
-                        ft.Icons.PERSON_OUTLINED,
-                        "Dr. Shailesh",
-                        "drshailesh@example.com",
-                    ),
-                ]),
+        # Get stats
+        patient_count = 0
+        visit_count = 0
+        if self.local_db:
+            try:
+                stats = self.local_db.get_stats()
+                patient_count = stats.get('patient_count', 0)
+                visit_count = stats.get('visit_count', 0)
+            except:
+                pass
 
-                # Sync section
-                self._create_settings_section("Sync", [
-                    self._create_settings_item(
-                        ft.Icons.SYNC,
-                        "Last synced",
-                        "5 minutes ago",
-                        action=ft.TextButton("Sync now"),
-                    ),
-                    self._create_settings_item(
-                        ft.Icons.STORAGE,
-                        "Local data",
-                        "127 patients • 856 visits",
-                    ),
-                ]),
-
-                # Appearance section
-                self._create_settings_section("Appearance", [
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Icon(ft.Icons.DARK_MODE_OUTLINED, color=Colors.NEUTRAL_600),
-                                ft.Text(
-                                    "Dark mode",
-                                    size=MobileTypography.BODY_LARGE,
-                                    color=Colors.NEUTRAL_900,
-                                    expand=True,
-                                ),
-                                ft.Switch(
-                                    value=self.is_dark_mode,
-                                    on_change=self._toggle_dark_mode,
-                                ),
-                            ],
-                            spacing=MobileSpacing.MD,
-                        ),
-                        bgcolor=Colors.NEUTRAL_0,
-                        padding=MobileSpacing.CARD_PADDING,
-                    ),
-                ]),
-
-                # About section
-                self._create_settings_section("About", [
-                    self._create_settings_item(
-                        ft.Icons.INFO_OUTLINED,
-                        "Version",
-                        "1.0.0 (Mobile Lite)",
-                    ),
-                    self._create_settings_item(
-                        ft.Icons.HELP_OUTLINED,
-                        "Help & Support",
-                        "Get help with DocAssist",
-                    ),
-                ]),
-
-                ft.Container(expand=True),
-
-                # Logout button
-                ft.Container(
-                    content=ft.OutlinedButton(
-                        text="Logout",
-                        icon=ft.Icons.LOGOUT,
-                        style=ft.ButtonStyle(
-                            color=Colors.ERROR_MAIN,
-                            side=ft.BorderSide(1, Colors.ERROR_MAIN),
-                            shape=ft.RoundedRectangleBorder(radius=Radius.BUTTON),
-                        ),
-                        width=float("inf"),
-                        height=MobileSpacing.TOUCH_TARGET,
-                        on_click=self._handle_logout,
-                    ),
-                    padding=MobileSpacing.SCREEN_PADDING,
-                ),
-                ft.Container(height=MobileSpacing.LG),
-            ],
-            spacing=0,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True,
+        # Create settings screen
+        self.settings_screen_widget = SettingsScreen(
+            user_name=user_name or "Guest",
+            user_email=user_email or "",
+            patient_count=patient_count,
+            visit_count=visit_count,
+            last_sync=self.sync_client.get_last_sync_text(),
+            is_dark_mode=self.is_dark_mode,
+            app_version="1.0.0",
+            on_sync=self._handle_manual_sync,
+            on_toggle_dark_mode=self._toggle_dark_mode,
+            on_logout=self._handle_logout,
         )
 
-        self.content_area.content = settings_content
+        self.content_area.content = self.settings_screen_widget
         self.content_area.update()
 
-    def _create_settings_section(self, title: str, items: list) -> ft.Container:
-        """Create a settings section."""
-        return ft.Container(
-            content=ft.Column(
-                [
-                    ft.Container(
-                        content=ft.Text(
-                            title,
-                            size=MobileTypography.LABEL_LARGE,
-                            weight=ft.FontWeight.W_600,
-                            color=Colors.NEUTRAL_600,
-                        ),
-                        padding=ft.padding.only(
-                            left=MobileSpacing.SCREEN_PADDING,
-                            top=MobileSpacing.LG,
-                            bottom=MobileSpacing.XS,
-                        ),
-                    ),
-                    ft.Container(
-                        content=ft.Column(items, spacing=1),
-                        bgcolor=Colors.NEUTRAL_0,
-                        border_radius=Radius.CARD,
-                        margin=ft.margin.symmetric(horizontal=MobileSpacing.SCREEN_PADDING),
-                    ),
-                ],
-                spacing=0,
-            ),
-        )
+    def _handle_manual_sync(self):
+        """Handle manual sync trigger."""
+        if self.sync_client and self.auth_service.is_authenticated():
+            self.sync_client.sync(background=True)
 
-    def _create_settings_item(
-        self,
-        icon: str,
-        title: str,
-        subtitle: str,
-        action: Optional[ft.Control] = None,
-    ) -> ft.Container:
-        """Create a settings item."""
-        return ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(icon, color=Colors.NEUTRAL_600, size=24),
-                    ft.Column(
-                        [
-                            ft.Text(
-                                title,
-                                size=MobileTypography.BODY_LARGE,
-                                color=Colors.NEUTRAL_900,
-                            ),
-                            ft.Text(
-                                subtitle,
-                                size=MobileTypography.BODY_SMALL,
-                                color=Colors.NEUTRAL_600,
-                            ),
-                        ],
-                        spacing=2,
-                        expand=True,
-                    ),
-                    action if action else ft.Container(),
-                ],
-                spacing=MobileSpacing.MD,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            padding=MobileSpacing.CARD_PADDING,
-        )
-
-    def _toggle_dark_mode(self, e):
+    def _toggle_dark_mode(self, value: bool):
         """Toggle dark mode."""
-        self.is_dark_mode = e.control.value
+        self.is_dark_mode = value
         self.page.theme_mode = ft.ThemeMode.DARK if self.is_dark_mode else ft.ThemeMode.LIGHT
         self.page.update()
 
-    def _handle_logout(self, e):
-        """Handle logout."""
-        self.is_authenticated = False
-        self._show_login()
+    def _handle_logout(self):
+        """Handle logout with confirmation."""
+        def confirm_logout(e):
+            # Close dialog
+            dialog.open = False
+            self.page.update()
+
+            # Logout
+            self.auth_service.logout()
+
+            # Clear database
+            if self.local_db:
+                self.local_db.close()
+                self.local_db = None
+
+            # Clear sync client
+            self.sync_client = SyncClient(data_dir="data")
+
+            # Show login
+            self._show_login()
+
+        def cancel_logout(e):
+            dialog.open = False
+            self.page.update()
+
+        # Show confirmation dialog
+        dialog = ft.AlertDialog(
+            title=ft.Text("Logout"),
+            content=ft.Text("Are you sure you want to logout? This will clear local data."),
+            actions=[
+                ft.TextButton("Cancel", on_click=cancel_logout),
+                ft.TextButton(
+                    "Logout",
+                    on_click=confirm_logout,
+                    style=ft.ButtonStyle(color=Colors.ERROR_MAIN),
+                ),
+            ],
+        )
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
 
     def _go_back(self):
         """Navigate back."""
         if self.current_screen == Screen.PATIENT_DETAIL:
+            # Return to previous screen (either home or patients)
+            if self.bottom_nav.selected_index == 0:
+                self._show_home_screen()
+            else:
+                self._show_patients_screen()
+        elif self.current_screen == Screen.ADD_PATIENT:
+            # Return to patients screen
             self._show_patients_screen()
+
+        # Update FAB visibility
+        self._update_fab_visibility()
+        self.page.update()
+
+    def _update_fab_visibility(self):
+        """Update FAB visibility based on current screen."""
+        if not self.fab:
+            return
+
+        # Show FAB only on Home and Patients screens
+        show_fab = self.current_screen in [Screen.HOME, Screen.PATIENTS]
+
+        # Get the fab_container from the Stack
+        if self.page.controls:
+            stack = self.page.controls[0]
+            if isinstance(stack, ft.Stack) and len(stack.controls) > 1:
+                fab_container = stack.controls[1]
+                fab_container.visible = show_fab
+                fab_container.update()
+
+    def _show_add_patient_screen(self):
+        """Show add patient screen."""
+        self.current_screen = Screen.ADD_PATIENT
+
+        # Create add patient screen
+        self.add_patient_screen_widget = AddPatientScreen(
+            on_back=self._go_back,
+            on_save=self._handle_save_patient,
+            haptic_feedback=self.haptics,
+        )
+
+        self.content_area.content = self.add_patient_screen_widget
+        self.content_area.update()
+
+        # Hide FAB on add patient screen
+        self._update_fab_visibility()
+
+    def _handle_save_patient(self, patient_data: dict, open_after: bool):
+        """Handle save patient from add patient screen."""
+        if not self.local_db:
+            print("Database not initialized")
+            return
+
+        def save():
+            try:
+                # Save to database
+                patient_id = self.local_db.add_patient(
+                    name=patient_data["name"],
+                    phone=patient_data.get("phone"),
+                    age=patient_data.get("age"),
+                    gender=patient_data["gender"],
+                )
+
+                # Update UI on main thread
+                def on_saved():
+                    if open_after:
+                        # Open patient detail
+                        self._show_patient_detail(patient_id)
+                    else:
+                        # Show success message and stay on add screen
+                        if self.add_patient_screen_widget:
+                            snackbar = self.add_patient_screen_widget.show_success_message(
+                                f"Patient {patient_data['name']} added successfully"
+                            )
+                            if snackbar:
+                                self.page.overlay.append(snackbar)
+                                snackbar.open = True
+                                self.page.update()
+
+                self.page.run_task(on_saved)
+
+            except Exception as e:
+                print(f"Error saving patient: {e}")
+
+                def show_error():
+                    # Show error snackbar
+                    snackbar = ft.SnackBar(
+                        content=ft.Text(f"Error saving patient: {e}"),
+                        bgcolor=Colors.ERROR_MAIN,
+                    )
+                    self.page.overlay.append(snackbar)
+                    snackbar.open = True
+                    self.page.update()
+
+                self.page.run_task(show_error)
+
+        threading.Thread(target=save, daemon=True).start()
+
+    def _handle_new_visit(self):
+        """Handle new visit action from FAB."""
+        # TODO: Implement new visit screen
+        print("New Visit - Not yet implemented")
+
+        # Show snackbar
+        snackbar = ft.SnackBar(
+            content=ft.Text("New Visit feature coming soon"),
+            duration=2000,
+        )
+        self.page.overlay.append(snackbar)
+        snackbar.open = True
+        self.page.update()
+
+    def _handle_add_lab(self):
+        """Handle add lab result action from FAB."""
+        # TODO: Implement add lab screen
+        print("Add Lab Result - Not yet implemented")
+
+        # Show snackbar
+        snackbar = ft.SnackBar(
+            content=ft.Text("Add Lab Result feature coming soon"),
+            duration=2000,
+        )
+        self.page.overlay.append(snackbar)
+        snackbar.open = True
+        self.page.update()
+
+    def _handle_schedule_appointment(self):
+        """Handle schedule appointment action from FAB."""
+        # TODO: Implement schedule appointment screen
+        print("Schedule Appointment - Not yet implemented")
+
+        # Show snackbar
+        snackbar = ft.SnackBar(
+            content=ft.Text("Schedule Appointment feature coming soon"),
+            duration=2000,
+        )
+        self.page.overlay.append(snackbar)
+        snackbar.open = True
         self.page.update()

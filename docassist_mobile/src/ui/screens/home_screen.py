@@ -12,6 +12,11 @@ from datetime import datetime
 from ..tokens import Colors, MobileSpacing, MobileTypography, Radius
 from ..components.appointment_card import AppointmentCard
 from ..components.sync_indicator import SyncIndicator
+from ..components.skeleton import SkeletonAppointmentCard, SkeletonList
+from ..components.pull_to_refresh import PullToRefresh
+from ..components.sync_status_bar import SyncStatusBar
+from ..animations import Animations
+from ..haptics import HapticFeedback
 
 
 @dataclass
@@ -42,10 +47,21 @@ class HomeScreen(ft.Container):
         on_refresh: Optional[Callable] = None,
         sync_status: str = "synced",
         last_sync: str = "Just now",
+        pending_count: int = 0,
+        haptic_feedback: Optional[HapticFeedback] = None,
     ):
         self.on_appointment_click = on_appointment_click
         self.on_patient_click = on_patient_click
         self.on_refresh = on_refresh
+        self.haptic_feedback = haptic_feedback
+
+        # Sync status bar (shown when there are pending changes)
+        self.sync_status_bar = SyncStatusBar(
+            pending_count=pending_count,
+            on_sync=self._handle_manual_sync,
+            on_dismiss=lambda: self.sync_status_bar.hide(),
+            haptic_feedback=haptic_feedback,
+        )
 
         # Sync indicator
         self.sync_indicator = SyncIndicator(
@@ -88,8 +104,8 @@ class HomeScreen(ft.Container):
             visible=False,
         )
 
-        # Build content
-        content = ft.Column(
+        # Build scrollable content (without sync status bar)
+        scrollable_content = ft.Column(
             [
                 # Header with sync status
                 ft.Container(
@@ -162,6 +178,23 @@ class HomeScreen(ft.Container):
             expand=True,
         )
 
+        # Wrap in pull-to-refresh
+        self.pull_to_refresh = PullToRefresh(
+            content=scrollable_content,
+            on_refresh=self._handle_pull_refresh,
+            haptic_feedback=haptic_feedback,
+        )
+
+        # Build main content with sync status bar
+        content = ft.Column(
+            [
+                self.sync_status_bar,
+                self.pull_to_refresh,
+            ],
+            spacing=0,
+            expand=True,
+        )
+
         super().__init__(
             content=content,
             expand=True,
@@ -172,7 +205,7 @@ class HomeScreen(ft.Container):
         self._show_empty_state()
 
     def set_appointments(self, appointments: List[AppointmentData]):
-        """Update appointments list."""
+        """Update appointments list with staggered animation."""
         self.appointments_list.controls.clear()
 
         if not appointments:
@@ -181,18 +214,27 @@ class HomeScreen(ft.Container):
 
         self._hide_empty_state()
 
-        for appt in appointments:
-            card = AppointmentCard(
-                time=appt.time,
-                patient_name=appt.patient_name,
-                reason=appt.reason,
-                on_click=lambda e, pid=appt.patient_id: self._on_appointment_click(pid),
+        # Create cards with staggered fade-in
+        for i, appt in enumerate(appointments):
+            card_container = ft.Container(
+                content=AppointmentCard(
+                    time=appt.time,
+                    patient_name=appt.patient_name,
+                    reason=appt.reason,
+                    on_click=lambda e, pid=appt.patient_id: self._on_appointment_click(pid),
+                    haptic_feedback=self.haptic_feedback,
+                ),
+                animate_opacity=Animations.fade_in(),
+                opacity=0,
             )
-            self.appointments_list.controls.append(card)
+            self.appointments_list.controls.append(card_container)
 
         # Update count badge
         self._update_count(len(appointments))
         self.appointments_list.update()
+
+        # Trigger staggered animation
+        self._animate_appointments_in()
 
     def _on_appointment_click(self, patient_id: int):
         """Handle appointment card click."""
@@ -221,7 +263,66 @@ class HomeScreen(ft.Container):
         self.sync_indicator = SyncIndicator(status=status, last_sync=last_sync)
         self.update()
 
-    def refresh(self):
-        """Trigger refresh."""
+    def _handle_pull_refresh(self):
+        """Handle pull-to-refresh trigger."""
         if self.on_refresh:
             self.on_refresh()
+
+    def _handle_manual_sync(self):
+        """Handle manual sync from status bar."""
+        if self.on_refresh:
+            self.on_refresh()
+
+    def complete_refresh(self, success: bool = True):
+        """Complete the refresh operation."""
+        self.pull_to_refresh.complete_refresh(success)
+
+    def update_sync_status_bar(self, pending_count: int = 0, is_syncing: bool = False, error: Optional[str] = None):
+        """Update sync status bar."""
+        if error:
+            self.sync_status_bar.set_error(error)
+        elif is_syncing:
+            self.sync_status_bar.set_syncing()
+        elif pending_count > 0:
+            self.sync_status_bar.set_pending(pending_count)
+        else:
+            self.sync_status_bar.set_success()
+
+    def refresh(self):
+        """Trigger refresh with haptic feedback."""
+        if self.haptic_feedback:
+            self.haptic_feedback.light()
+
+        if self.on_refresh:
+            self.on_refresh()
+
+    def _animate_appointments_in(self):
+        """Animate appointments with staggered effect."""
+        import threading
+        import time
+
+        def animate():
+            for i, container in enumerate(self.appointments_list.controls):
+                if i < 10:  # Limit to first 10 items
+                    time.sleep(0.05)  # 50ms delay between items
+                container.opacity = 1.0
+                container.update()
+
+        # Run animation in background
+        threading.Thread(target=animate, daemon=True).start()
+
+    def show_loading(self):
+        """Show skeleton loading state."""
+        self.appointments_list.controls.clear()
+        self._hide_empty_state()
+
+        # Add skeleton cards
+        for _ in range(3):
+            self.appointments_list.controls.append(SkeletonAppointmentCard())
+
+        self.appointments_list.update()
+
+    def on_refresh_complete(self):
+        """Called when refresh completes."""
+        if self.haptic_feedback:
+            self.haptic_feedback.success()

@@ -11,6 +11,10 @@ from dataclasses import dataclass
 from ..tokens import Colors, MobileSpacing, MobileTypography, Radius
 from ..components.patient_card import PatientCard
 from ..components.search_bar import SearchBar
+from ..components.skeleton import SkeletonPatientCard
+from ..components.pull_to_refresh import PullToRefresh
+from ..animations import Animations
+from ..haptics import HapticFeedback
 
 
 @dataclass
@@ -39,9 +43,13 @@ class PatientListScreen(ft.Container):
         self,
         on_patient_click: Optional[Callable[[int], None]] = None,
         on_search: Optional[Callable[[str], None]] = None,
+        on_refresh: Optional[Callable] = None,
+        haptic_feedback: Optional[HapticFeedback] = None,
     ):
         self.on_patient_click = on_patient_click
         self.on_search = on_search
+        self.on_refresh = on_refresh
+        self.haptic_feedback = haptic_feedback
         self._patients: List[PatientData] = []
 
         # Search bar
@@ -158,10 +166,9 @@ class PatientListScreen(ft.Container):
             visible=False,
         )
 
-        # Build content
-        content = ft.Column(
+        # Build scrollable content
+        scrollable_content = ft.Column(
             [
-                self.search_bar,
                 self.results_count,
                 ft.Stack(
                     [
@@ -172,6 +179,23 @@ class PatientListScreen(ft.Container):
                     ],
                     expand=True,
                 ),
+            ],
+            spacing=0,
+            expand=True,
+        )
+
+        # Wrap in pull-to-refresh
+        self.pull_to_refresh = PullToRefresh(
+            content=scrollable_content,
+            on_refresh=self._handle_pull_refresh,
+            haptic_feedback=haptic_feedback,
+        )
+
+        # Build main content with search bar at top
+        content = ft.Column(
+            [
+                self.search_bar,
+                self.pull_to_refresh,
             ],
             spacing=0,
             expand=True,
@@ -189,7 +213,7 @@ class PatientListScreen(ft.Container):
         self._render_patients(patients)
 
     def _render_patients(self, patients: List[PatientData]):
-        """Render patient list."""
+        """Render patient list with staggered animation."""
         self.patient_list.controls.clear()
         self._hide_all_states()
 
@@ -201,18 +225,28 @@ class PatientListScreen(ft.Container):
             self.results_count.visible = True
             self.results_count.content.value = f"{len(patients)} patient{'s' if len(patients) != 1 else ''}"
 
-            for patient in patients:
-                card = PatientCard(
-                    name=patient.name,
-                    age=patient.age,
-                    gender=patient.gender,
-                    phone=patient.phone,
-                    last_visit=patient.last_visit,
-                    on_click=lambda e, pid=patient.id: self._on_patient_click(pid),
+            # Create cards with staggered fade-in
+            for i, patient in enumerate(patients):
+                card_container = ft.Container(
+                    content=PatientCard(
+                        name=patient.name,
+                        age=patient.age,
+                        gender=patient.gender,
+                        phone=patient.phone,
+                        last_visit=patient.last_visit,
+                        on_click=lambda e, pid=patient.id: self._on_patient_click(pid),
+                        haptic_feedback=self.haptic_feedback,
+                    ),
+                    animate_opacity=Animations.fade_in(),
+                    opacity=0,
                 )
-                self.patient_list.controls.append(card)
+                self.patient_list.controls.append(card_container)
 
         self.update()
+
+        # Trigger staggered animation if we have patients
+        if patients:
+            self._animate_patients_in()
 
     def _on_patient_click(self, patient_id: int):
         """Handle patient card click."""
@@ -239,6 +273,15 @@ class PatientListScreen(ft.Container):
         """Handle search clear."""
         self._render_patients(self._patients)
 
+    def _handle_pull_refresh(self):
+        """Handle pull-to-refresh trigger."""
+        if self.on_refresh:
+            self.on_refresh()
+
+    def complete_refresh(self, success: bool = True):
+        """Complete the refresh operation."""
+        self.pull_to_refresh.complete_refresh(success)
+
     def _hide_all_states(self):
         """Hide all state containers."""
         self.loading.visible = False
@@ -247,10 +290,16 @@ class PatientListScreen(ft.Container):
         self.patient_list.visible = False
 
     def show_loading(self):
-        """Show loading state."""
+        """Show skeleton loading state."""
+        self.patient_list.controls.clear()
         self._hide_all_states()
-        self.loading.visible = True
+        self.patient_list.visible = True
         self.results_count.visible = False
+
+        # Add skeleton cards
+        for _ in range(8):
+            self.patient_list.controls.append(SkeletonPatientCard())
+
         self.update()
 
     def show_no_data(self):
@@ -264,3 +313,18 @@ class PatientListScreen(ft.Container):
         """Scroll list to top."""
         if self.patient_list.controls:
             self.patient_list.scroll_to(offset=0, duration=300)
+
+    def _animate_patients_in(self):
+        """Animate patients with staggered effect."""
+        import threading
+        import time
+
+        def animate():
+            for i, container in enumerate(self.patient_list.controls):
+                if i < 15:  # Limit delay to first 15 items
+                    time.sleep(0.04)  # 40ms delay between items
+                container.opacity = 1.0
+                container.update()
+
+        # Run animation in background
+        threading.Thread(target=animate, daemon=True).start()

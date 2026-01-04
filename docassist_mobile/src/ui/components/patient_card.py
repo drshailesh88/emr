@@ -3,6 +3,7 @@
 import flet as ft
 from typing import Optional, Callable
 from ..tokens import Colors, MobileSpacing, MobileTypography, Radius
+from ..animations import Animations
 
 
 class PatientCard(ft.Container):
@@ -17,6 +18,7 @@ class PatientCard(ft.Container):
         last_visit: Optional[str] = None,
         on_click: Optional[Callable] = None,
         selected: bool = False,
+        haptic_feedback=None,
     ):
         # Generate initials
         initials = "".join([n[0] for n in name.split()[:2]]).upper()
@@ -82,6 +84,10 @@ class PatientCard(ft.Container):
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
+        # Store haptic feedback for click handler
+        self.haptic_feedback = haptic_feedback
+        self._original_on_click = on_click
+
         super().__init__(
             content=content,
             bgcolor=Colors.PRIMARY_50 if selected else Colors.NEUTRAL_0,
@@ -89,5 +95,26 @@ class PatientCard(ft.Container):
             padding=MobileSpacing.CARD_PADDING,
             border=ft.border.all(2, Colors.PRIMARY_500) if selected else None,
             ink=True,
-            on_click=on_click,
+            on_click=self._handle_click if on_click else None,
+            # Add tap animation
+            animate_scale=Animations.scale_tap(),
+            scale=1.0,
         )
+
+    def _handle_click(self, e):
+        """Handle click with haptic feedback and animation."""
+        # Trigger haptic
+        if self.haptic_feedback:
+            self.haptic_feedback.light()
+
+        # Scale animation
+        self.scale = 0.97
+        self.update()
+
+        # Call original handler
+        if self._original_on_click:
+            self._original_on_click(e)
+
+        # Scale back
+        self.scale = 1.0
+        self.update()

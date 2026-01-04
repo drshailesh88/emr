@@ -11,6 +11,10 @@ from dataclasses import dataclass
 from ..tokens import Colors, MobileSpacing, MobileTypography, Radius
 from ..components.visit_card import VisitCard
 from ..components.lab_card import LabCard
+from ..components.prescription_card import PrescriptionCard
+from ..components.skeleton import SkeletonVisitCard, SkeletonLabCard
+from ..haptics import HapticFeedback
+from ..animations import Animations
 
 
 @dataclass
@@ -75,15 +79,24 @@ class PatientDetailScreen(ft.Container):
         on_call: Optional[Callable[[str], None]] = None,
         on_share: Optional[Callable[[int], None]] = None,
         on_add_appointment: Optional[Callable[[int], None]] = None,
+        on_view_prescription: Optional[Callable[[int], None]] = None,
+        haptic_feedback: Optional[HapticFeedback] = None,
     ):
         self.patient = patient
         self.on_back = on_back
         self.on_call = on_call
         self.on_share = on_share
         self.on_add_appointment = on_add_appointment
+        self.on_view_prescription = on_view_prescription
+        self.haptic_feedback = haptic_feedback
 
         # Tab content lists
         self.visits_list = ft.ListView(
+            spacing=MobileSpacing.SM,
+            padding=MobileSpacing.SCREEN_PADDING,
+            expand=True,
+        )
+        self.prescriptions_list = ft.ListView(
             spacing=MobileSpacing.SM,
             padding=MobileSpacing.SCREEN_PADDING,
             expand=True,
@@ -101,6 +114,7 @@ class PatientDetailScreen(ft.Container):
 
         # Empty states for each tab
         self.visits_empty = self._create_empty_state("No visits recorded", ft.Icons.EVENT_NOTE)
+        self.prescriptions_empty = self._create_empty_state("No prescriptions", ft.Icons.PICTURE_AS_PDF)
         self.labs_empty = self._create_empty_state("No lab results", ft.Icons.SCIENCE)
         self.procedures_empty = self._create_empty_state("No procedures", ft.Icons.MEDICAL_SERVICES)
 
@@ -285,6 +299,14 @@ class PatientDetailScreen(ft.Container):
                             ),
                         ),
                         ft.Tab(
+                            text="Rx",
+                            icon=ft.Icons.PICTURE_AS_PDF,
+                            content=ft.Stack(
+                                [self.prescriptions_list, self.prescriptions_empty],
+                                expand=True,
+                            ),
+                        ),
+                        ft.Tab(
                             text="Labs",
                             icon=ft.Icons.SCIENCE,
                             content=ft.Stack(
@@ -347,6 +369,50 @@ class PatientDetailScreen(ft.Container):
                 self.visits_list.controls.append(card)
 
         self.visits_list.update()
+
+    def set_prescriptions(self, visits: List[VisitData]):
+        """
+        Set prescription data from visits.
+
+        Only shows visits that have prescriptions.
+
+        Args:
+            visits: List of visits (will be filtered for those with prescriptions)
+        """
+        from ...services.pdf_service import MobilePDFService
+
+        self.prescriptions_list.controls.clear()
+
+        # Filter visits with prescriptions
+        visits_with_rx = [v for v in visits if v.prescription]
+
+        if not visits_with_rx:
+            self.prescriptions_empty.visible = True
+            self.prescriptions_list.visible = False
+        else:
+            self.prescriptions_empty.visible = False
+            self.prescriptions_list.visible = True
+
+            # Create PDF service for parsing
+            pdf_service = MobilePDFService()
+
+            for visit in visits_with_rx:
+                # Get prescription summary
+                summary = pdf_service.get_prescription_summary(visit.prescription)
+
+                # Create prescription card
+                card = PrescriptionCard(
+                    visit_id=visit.id,
+                    visit_date=visit.date,
+                    diagnosis=summary.get('diagnosis', 'No diagnosis'),
+                    medication_count=summary.get('medication_count', 0),
+                    has_investigations=summary.get('has_investigations', False),
+                    has_follow_up=summary.get('has_follow_up', False),
+                    on_view_pdf=self._handle_view_prescription,
+                )
+                self.prescriptions_list.controls.append(card)
+
+        self.prescriptions_list.update()
 
     def set_labs(self, labs: List[LabData]):
         """Set lab data."""
@@ -425,16 +491,33 @@ class PatientDetailScreen(ft.Container):
         self.procedures_list.update()
 
     def _handle_call(self):
-        """Handle call button."""
+        """Handle call button with haptic feedback."""
+        if self.haptic_feedback:
+            self.haptic_feedback.medium()
+
         if self.on_call and self.patient and self.patient.phone:
             self.on_call(self.patient.phone)
 
     def _handle_share(self):
-        """Handle share button."""
+        """Handle share button with haptic feedback."""
+        if self.haptic_feedback:
+            self.haptic_feedback.light()
+
         if self.on_share and self.patient:
             self.on_share(self.patient.id)
 
     def _handle_add_appointment(self):
-        """Handle add appointment button."""
+        """Handle add appointment button with haptic feedback."""
+        if self.haptic_feedback:
+            self.haptic_feedback.light()
+
         if self.on_add_appointment and self.patient:
             self.on_add_appointment(self.patient.id)
+
+    def _handle_view_prescription(self, visit_id: int):
+        """Handle view prescription with haptic feedback."""
+        if self.haptic_feedback:
+            self.haptic_feedback.light()
+
+        if self.on_view_prescription:
+            self.on_view_prescription(visit_id)

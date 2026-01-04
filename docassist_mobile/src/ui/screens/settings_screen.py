@@ -8,6 +8,9 @@ import flet as ft
 from typing import Callable, Optional
 
 from ..tokens import Colors, MobileSpacing, MobileTypography, Radius
+from ..haptics import HapticFeedback
+from ..animations import Animations
+from ...services.biometric_service import get_biometric_icon
 
 
 class SettingsScreen(ft.Container):
@@ -31,20 +34,37 @@ class SettingsScreen(ft.Container):
         last_sync: str = "Never",
         is_dark_mode: bool = False,
         app_version: str = "1.0.0",
+        biometric_available: bool = False,
+        biometric_enabled: bool = False,
+        biometric_type: str = "fingerprint",  # "face_id" or "fingerprint"
         on_sync: Optional[Callable] = None,
         on_toggle_dark_mode: Optional[Callable[[bool], None]] = None,
+        on_toggle_biometric: Optional[Callable[[bool], None]] = None,
+        on_change_password: Optional[Callable] = None,
         on_logout: Optional[Callable] = None,
         on_help: Optional[Callable] = None,
+        haptic_feedback: Optional[HapticFeedback] = None,
     ):
         self.on_sync = on_sync
         self.on_toggle_dark_mode = on_toggle_dark_mode
+        self.on_toggle_biometric = on_toggle_biometric
+        self.on_change_password = on_change_password
         self.on_logout = on_logout
         self.on_help = on_help
+        self.haptic_feedback = haptic_feedback
+        self.biometric_available = biometric_available
+        self.biometric_type = biometric_type
 
         # Dark mode switch
         self.dark_mode_switch = ft.Switch(
             value=is_dark_mode,
             on_change=self._handle_dark_mode_toggle,
+        )
+
+        # Biometric switch
+        self.biometric_switch = ft.Switch(
+            value=biometric_enabled,
+            on_change=self._handle_biometric_toggle,
         )
 
         # Build content
@@ -79,7 +99,7 @@ class SettingsScreen(ft.Container):
                         action=ft.TextButton(
                             text="Sync now",
                             style=ft.ButtonStyle(color=Colors.PRIMARY_500),
-                            on_click=lambda e: self.on_sync() if self.on_sync else None,
+                            on_click=self._handle_sync,
                         ),
                     ),
                     self._create_item(
@@ -88,6 +108,9 @@ class SettingsScreen(ft.Container):
                         subtitle=f"{patient_count} patients • {visit_count} visits",
                     ),
                 ]),
+
+                # Security section
+                self._create_security_section(biometric_enabled),
 
                 # Appearance section
                 self._create_section("Appearance", [
@@ -151,17 +174,21 @@ class SettingsScreen(ft.Container):
 
                 # Logout button
                 ft.Container(
-                    content=ft.OutlinedButton(
-                        text="Logout",
-                        icon=ft.Icons.LOGOUT,
-                        style=ft.ButtonStyle(
-                            color=Colors.ERROR_MAIN,
-                            side=ft.BorderSide(1.5, Colors.ERROR_MAIN),
-                            shape=ft.RoundedRectangleBorder(radius=Radius.BUTTON),
+                    content=ft.Container(
+                        content=ft.OutlinedButton(
+                            text="Logout",
+                            icon=ft.Icons.LOGOUT,
+                            style=ft.ButtonStyle(
+                                color=Colors.ERROR_MAIN,
+                                side=ft.BorderSide(1.5, Colors.ERROR_MAIN),
+                                shape=ft.RoundedRectangleBorder(radius=Radius.BUTTON),
+                            ),
+                            width=float("inf"),
+                            height=MobileSpacing.TOUCH_TARGET,
+                            on_click=self._handle_logout,
                         ),
-                        width=float("inf"),
-                        height=MobileSpacing.TOUCH_TARGET,
-                        on_click=self._handle_logout,
+                        animate_scale=Animations.scale_tap(),
+                        scale=1.0,
                     ),
                     padding=MobileSpacing.SCREEN_PADDING,
                 ),
@@ -196,6 +223,68 @@ class SettingsScreen(ft.Container):
             expand=True,
             bgcolor=Colors.NEUTRAL_50,
         )
+
+    def _create_security_section(self, biometric_enabled: bool) -> ft.Container:
+        """Create security section with biometric toggle."""
+        if not self.biometric_available:
+            # If biometrics not available, only show change password
+            return self._create_section("Security", [
+                self._create_item(
+                    icon=ft.Icons.LOCK,
+                    title="Change Password",
+                    subtitle="Update your account password",
+                    on_tap=lambda: self.on_change_password() if self.on_change_password else None,
+                    show_chevron=True,
+                ),
+            ])
+
+        # Biometrics available - show full security section
+        biometric_icon = get_biometric_icon(self.biometric_type)
+        biometric_display_name = "Face ID" if self.biometric_type == "face_id" else "Fingerprint"
+
+        return self._create_section("Security", [
+            # Biometric toggle
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            biometric_icon,
+                            color=Colors.NEUTRAL_600,
+                            size=24,
+                        ),
+                        ft.Container(width=MobileSpacing.MD),
+                        ft.Column(
+                            [
+                                ft.Text(
+                                    f"Use {biometric_display_name}",
+                                    size=MobileTypography.BODY_LARGE,
+                                    color=Colors.NEUTRAL_900,
+                                ),
+                                ft.Text(
+                                    f"Unlock with {biometric_display_name}",
+                                    size=MobileTypography.BODY_SMALL,
+                                    color=Colors.NEUTRAL_600,
+                                ),
+                            ],
+                            spacing=2,
+                            expand=True,
+                        ),
+                        self.biometric_switch,
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                bgcolor=Colors.NEUTRAL_0,
+                padding=MobileSpacing.CARD_PADDING,
+            ),
+            # Change password
+            self._create_item(
+                icon=ft.Icons.LOCK,
+                title="Change Password",
+                subtitle="Update your account password",
+                on_tap=lambda: self.on_change_password() if self.on_change_password else None,
+                show_chevron=True,
+            ),
+        ])
 
     def _create_section(self, title: str, items: list) -> ft.Container:
         """Create a settings section."""
@@ -277,14 +366,43 @@ class SettingsScreen(ft.Container):
         )
 
     def _handle_dark_mode_toggle(self, e):
-        """Handle dark mode toggle."""
+        """Handle dark mode toggle with haptic feedback."""
+        # Trigger selection haptic
+        if self.haptic_feedback:
+            self.haptic_feedback.selection()
+
         if self.on_toggle_dark_mode:
             self.on_toggle_dark_mode(e.control.value)
 
+    def _handle_biometric_toggle(self, e):
+        """Handle biometric toggle with haptic feedback."""
+        enabled = e.control.value
+
+        # Trigger selection haptic
+        if self.haptic_feedback:
+            self.haptic_feedback.selection()
+
+        # Call handler
+        if self.on_toggle_biometric:
+            self.on_toggle_biometric(enabled)
+
     def _handle_logout(self, e):
-        """Handle logout button."""
+        """Handle logout button with haptic feedback."""
+        # Trigger medium haptic
+        if self.haptic_feedback:
+            self.haptic_feedback.medium()
+
         if self.on_logout:
             self.on_logout()
+
+    def _handle_sync(self, e):
+        """Handle sync button with haptic feedback."""
+        # Trigger light haptic
+        if self.haptic_feedback:
+            self.haptic_feedback.light()
+
+        if self.on_sync:
+            self.on_sync()
 
     def update_sync_status(self, last_sync: str):
         """Update last sync time display."""
