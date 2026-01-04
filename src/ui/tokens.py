@@ -513,6 +513,59 @@ def card_container(is_dark: bool = False, selected: bool = False) -> Dict[str, A
 
 
 # =============================================================================
+# ACCESSIBILITY - WCAG 2.1 Guidelines
+# =============================================================================
+
+class Accessibility:
+    """Accessibility guidelines and contrast recommendations.
+
+    WCAG 2.1 Contrast Requirements:
+    - Normal text: 4.5:1 minimum
+    - Large text (18px+ or 14px+ bold): 3:1 minimum
+    - UI components: 3:1 minimum
+
+    Our Verified Combinations (Light Mode):
+    - NEUTRAL_900 on NEUTRAL_0: 16:1 ✓
+    - NEUTRAL_700 on NEUTRAL_0: 8.5:1 ✓
+    - NEUTRAL_600 on NEUTRAL_0: 5.7:1 ✓
+    - PRIMARY_500 on NEUTRAL_0: 4.6:1 ✓
+    - NEUTRAL_0 on PRIMARY_500: 4.6:1 ✓
+    - ERROR_MAIN on NEUTRAL_0: 4.5:1 ✓
+
+    Our Verified Combinations (Dark Mode):
+    - NEUTRAL_100 on NEUTRAL_950: 15.4:1 ✓
+    - NEUTRAL_200 on NEUTRAL_900: 12:1 ✓
+    - PRIMARY_200 on NEUTRAL_950: 8.2:1 ✓
+
+    Focus States:
+    - All interactive elements should have visible focus indicators
+    - Use FOCUS_RING color with 2px offset
+
+    Touch Targets:
+    - Minimum 44x44px for touch targets (mobile)
+    - Minimum 24x24px for pointer targets (desktop)
+    """
+
+    # Minimum sizes
+    MIN_TOUCH_TARGET = 44
+    MIN_POINTER_TARGET = 24
+    MIN_FONT_SIZE = 12
+
+    # Focus indicator
+    FOCUS_OFFSET = 2
+    FOCUS_WIDTH = 2
+
+    @staticmethod
+    def is_large_text(size: int, weight: str = 'w400') -> bool:
+        """Check if text qualifies as 'large' for contrast purposes."""
+        if size >= 18:
+            return True
+        if size >= 14 and weight in ('w500', 'w600', 'w700'):
+            return True
+        return False
+
+
+# =============================================================================
 # EXPORTS
 # =============================================================================
 
@@ -527,6 +580,7 @@ __all__ = [
     'Motion',
     'Breakpoints',
     'ZIndex',
+    'Accessibility',
     'get_theme_colors',
     'create_premium_theme',
     'primary_button_style',
