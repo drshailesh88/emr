@@ -222,13 +222,16 @@ Doctor's Device                    DocAssist Cloud
 4. **Optional feature**: Core app works fully offline without backup
 5. **BYOS support**: Doctors can use their own S3/Backblaze/Google Drive
 
-### Pricing Tiers (Future)
-| Tier   | Storage | Price    | Features                    |
-|--------|---------|----------|-----------------------------|
-| Free   | 1 GB    | ₹0       | Manual backup, BYOS         |
-| Basic  | 10 GB   | ₹99/mo   | Auto-backup, 30-day history |
-| Pro    | 50 GB   | ₹299/mo  | + Multi-device sync         |
-| Clinic | 200 GB  | ₹999/mo  | + 5 users, audit log        |
+### Pricing Tiers
+| Tier | Storage | Price | Features |
+|------|---------|-------|----------|
+| Free | 1 GB | ₹0 | Desktop app, local backup, local AI, BYOS |
+| Essential | 10 GB | ₹199/mo | + Cloud backup, mobile sync, 30-day history |
+| Professional | 50 GB | ₹499/mo | + Cloud AI, SMS reminders, priority support |
+| Clinic | 200 GB | ₹2,499/mo | + 5 users, audit dashboard, admin controls |
+| Hospital | 1 TB | ₹9,999/mo | + Unlimited users, on-premise option, SLA |
+
+*Early adopter pricing locked for first 1,000 users. Prices may increase for new subscribers.*
 
 ## Prescription JSON Schema
 ```json
@@ -372,8 +375,11 @@ docassist_mobile/
 ### App Store Strategy
 - **iOS**: App Store via Flet's iOS build
 - **Android**: Google Play Store via Flet's Android build
-- **Pricing**: Free (Lite), ₹99/mo (Pro), ₹199/mo (Cloud)
-- **Rating goal**: 4.5+ stars, respond to all reviews
+- **Pricing**:
+  - Mobile Lite: Free (included with any subscription)
+  - Mobile Pro (on-device AI): ₹299/mo add-on
+  - Mobile Cloud (cloud AI): Included in Professional tier (₹499/mo)
+- **Rating goal**: 4.5+ stars, respond to all reviews within 24 hours
 
 ### Development Phases
 1. **Phase 1**: Mobile Lite MVP (view-only, sync from desktop)
