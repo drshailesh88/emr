@@ -18,6 +18,13 @@ from .cards import (
     SelectableCard,
 )
 
+from .text_fields import (
+    PremiumTextField,
+    PremiumSearchField,
+    PremiumTextArea,
+    ChatInputField,
+)
+
 __all__ = [
     # Buttons
     'PrimaryButton',
@@ -30,4 +37,10 @@ __all__ = [
     'PremiumCard',
     'PatientCard',
     'SelectableCard',
+
+    # Text Fields
+    'PremiumTextField',
+    'PremiumSearchField',
+    'PremiumTextArea',
+    'ChatInputField',
 ]

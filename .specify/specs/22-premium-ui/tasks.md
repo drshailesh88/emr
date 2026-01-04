@@ -44,12 +44,13 @@
 - [x] Implement `IconActionButton` component
 - [x] Add hover/press animations via ButtonStyle states
 
-### 5B.2 Premium Text Fields
-- [ ] Create `src/ui/widgets/text_fields.py`
-- [ ] Implement `PremiumTextField` with floating label
-- [ ] Implement `PremiumTextArea` with auto-resize
-- [ ] Implement `SearchField` with icon
-- [ ] Add focus state animations
+### 5B.2 Premium Text Fields (DONE)
+- [x] Create `src/ui/widgets/text_fields.py`
+- [x] Implement `PremiumTextField` with floating label
+- [x] Implement `PremiumTextArea` with multi-line support
+- [x] Implement `PremiumSearchField` with rounded design
+- [x] Implement `ChatInputField` for chat interfaces
+- [x] Add focus state styling
 
 ### 5B.3 Premium Cards (DONE)
 - [x] Create `src/ui/widgets/cards.py`
@@ -66,7 +67,7 @@
 
 ---
 
-## Phase 5C: Panel Redesign (PARTIAL)
+## Phase 5C: Panel Redesign (DONE)
 
 ### 5C.1 Header Redesign (DONE)
 - [x] Premium logo treatment with container
@@ -90,11 +91,13 @@
 - [x] Refactor main `central_panel.py` (1,812 → 745 lines)
 - [x] Update `src/ui/components/__init__.py` with exports
 
-### 5C.4 Agent Panel Redesign
-- [ ] Premium chat bubbles
-- [ ] Typing indicator
-- [ ] Quick action chips
-- [ ] Input area improvements
+### 5C.4 Agent Panel Redesign (DONE)
+- [x] Premium chat bubbles with shadows
+- [x] Typing indicator ("AI is thinking...")
+- [x] Quick action chips (Last labs, Medications, Summary)
+- [x] Premium input area with pill-shaped field
+- [x] Message timestamps
+- [x] AI icon in assistant messages
 
 ---
 
