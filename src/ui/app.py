@@ -3,6 +3,7 @@
 import flet as ft
 from typing import Optional
 import threading
+import logging
 
 from ..services.database import DatabaseService
 from ..services.llm import LLMService
@@ -17,6 +18,8 @@ from .patient_panel import PatientPanel
 from .central_panel import CentralPanel
 from .agent_panel import AgentPanel
 from .backup_dialog import show_backup_dialog
+
+logger = logging.getLogger(__name__)
 
 
 class DocAssistApp:
@@ -181,11 +184,17 @@ class DocAssistApp:
     def _check_llm_status(self):
         """Check LLM availability in background."""
         def check():
-            if self.llm.is_available():
-                model_info = self.llm.get_model_info()
-                self._update_status(f"LLM: {model_info['model']} | RAM: {model_info['ram_gb']:.1f}GB")
-            else:
-                self._update_status("Ollama not running - AI features disabled", error=True)
+            try:
+                if self.llm.is_available():
+                    model_info = self.llm.get_model_info()
+                    logger.info(f"LLM available: {model_info['model']}, RAM: {model_info['ram_gb']:.1f}GB")
+                    self._update_status(f"LLM: {model_info['model']} | RAM: {model_info['ram_gb']:.1f}GB")
+                else:
+                    logger.warning("Ollama not running - AI features disabled")
+                    self._update_status("Ollama not running - AI features disabled", error=True)
+            except Exception as e:
+                logger.error(f"Error checking LLM status: {e}", exc_info=True)
+                self._update_status("Error checking LLM status", error=True)
 
         threading.Thread(target=check, daemon=True).start()
 
@@ -220,132 +229,189 @@ class DocAssistApp:
     def _index_patient_for_rag(self, patient_id: int):
         """Index patient documents for RAG in background."""
         def index():
-            # Get patient summary
-            summary = self.db.get_patient_summary(patient_id)
-            if summary:
-                self.rag.index_patient_summary(patient_id, summary)
+            try:
+                # Get patient summary
+                summary = self.db.get_patient_summary(patient_id)
+                if summary:
+                    self.rag.index_patient_summary(patient_id, summary)
 
-            # Get all documents
-            documents = self.db.get_patient_documents_for_rag(patient_id)
-            if documents:
-                self.rag.index_patient_documents(patient_id, documents)
+                # Get all documents
+                documents = self.db.get_patient_documents_for_rag(patient_id)
+                if documents:
+                    self.rag.index_patient_documents(patient_id, documents)
+                logger.debug(f"Indexed patient {patient_id} for RAG")
+            except Exception as e:
+                logger.error(f"Error indexing patient {patient_id} for RAG: {e}", exc_info=True)
 
         threading.Thread(target=index, daemon=True).start()
 
     def _on_patient_search(self, query: str):
         """Handle patient search."""
-        if not query.strip():
-            self._load_patients()
-            return
+        try:
+            if not query.strip():
+                self._load_patients()
+                return
 
-        # First try basic search
-        patients = self.db.search_patients_basic(query)
+            logger.debug(f"Searching patients with query: {query}")
+            # First try basic search
+            patients = self.db.search_patients_basic(query)
 
-        # If no results and query looks like natural language, try RAG search
-        if not patients and len(query.split()) > 2:
-            results = self.rag.search_patients(query, n_results=10)
-            if results:
-                patient_ids = [r[0] for r in results]
-                patients = [self.db.get_patient(pid) for pid in patient_ids if self.db.get_patient(pid)]
+            # If no results and query looks like natural language, try RAG search
+            if not patients and len(query.split()) > 2:
+                results = self.rag.search_patients(query, n_results=10)
+                if results:
+                    patient_ids = [r[0] for r in results]
+                    patients = [self.db.get_patient(pid) for pid in patient_ids if self.db.get_patient(pid)]
 
-        self.patient_panel.set_patients(patients)
+            self.patient_panel.set_patients(patients)
+            logger.info(f"Patient search returned {len(patients)} results")
+        except Exception as e:
+            logger.error(f"Error during patient search: {e}", exc_info=True)
+            self._update_status("Error searching patients", error=True)
 
     def _on_new_patient(self, patient_data: dict):
         """Handle new patient creation."""
-        patient = Patient(**patient_data)
-        saved_patient = self.db.add_patient(patient)
+        try:
+            patient = Patient(**patient_data)
+            saved_patient = self.db.add_patient(patient)
+            logger.info(f"Created new patient: {saved_patient.name} (ID: {saved_patient.id})")
 
-        # Index for RAG
-        summary = f"Patient: {saved_patient.name}. UHID: {saved_patient.uhid}"
-        if saved_patient.age:
-            summary += f". Age: {saved_patient.age}"
-        if saved_patient.gender:
-            summary += f". Gender: {saved_patient.gender}"
-        self.rag.index_patient_summary(saved_patient.id, summary)
+            # Index for RAG
+            summary = f"Patient: {saved_patient.name}. UHID: {saved_patient.uhid}"
+            if saved_patient.age:
+                summary += f". Age: {saved_patient.age}"
+            if saved_patient.gender:
+                summary += f". Gender: {saved_patient.gender}"
+            self.rag.index_patient_summary(saved_patient.id, summary)
 
-        self._load_patients()
-        self._on_patient_selected(saved_patient)
-        self._update_status(f"Created patient: {saved_patient.name}")
+            self._load_patients()
+            self._on_patient_selected(saved_patient)
+            self._update_status(f"Created patient: {saved_patient.name}")
+        except Exception as e:
+            logger.error(f"Error creating new patient: {e}", exc_info=True)
+            self._update_status("Error creating patient", error=True)
 
     def _on_generate_prescription(self, clinical_notes: str, callback):
         """Handle prescription generation."""
         if not self.llm.is_available():
+            logger.warning("Prescription generation attempted but Ollama not available")
             callback(False, None, "Ollama is not running. Please start Ollama first.")
             return
 
         self._update_status("Generating prescription...")
+        logger.debug("Starting prescription generation")
 
         def generate():
-            success, prescription, raw = self.llm.generate_prescription(clinical_notes)
-            if self.page:
-                self.page.run_thread_safe(lambda: callback(success, prescription, raw))
-                self.page.run_thread_safe(lambda: self._update_status(
-                    "Prescription generated" if success else f"Error: {raw[:50]}"
-                ))
+            try:
+                success, prescription, raw = self.llm.generate_prescription(clinical_notes)
+                if success:
+                    logger.info("Prescription generated successfully")
+                else:
+                    logger.error(f"Prescription generation failed: {raw[:100]}")
+                if self.page:
+                    self.page.run_thread_safe(lambda: callback(success, prescription, raw))
+                    self.page.run_thread_safe(lambda: self._update_status(
+                        "Prescription generated" if success else f"Error: {raw[:50]}"
+                    ))
+            except Exception as e:
+                logger.error(f"Error during prescription generation: {e}", exc_info=True)
+                if self.page:
+                    self.page.run_thread_safe(lambda: callback(False, None, str(e)))
+                    self.page.run_thread_safe(lambda: self._update_status("Error generating prescription", error=True))
 
         threading.Thread(target=generate, daemon=True).start()
 
     def _on_save_visit(self, visit_data: dict):
         """Handle saving a visit."""
         if not self.current_patient:
+            logger.warning("Save visit attempted without current patient")
             return False
 
-        visit = Visit(
-            patient_id=self.current_patient.id,
-            **visit_data
-        )
-        saved_visit = self.db.add_visit(visit)
+        try:
+            visit = Visit(
+                patient_id=self.current_patient.id,
+                **visit_data
+            )
+            saved_visit = self.db.add_visit(visit)
+            logger.info(f"Visit saved for patient {self.current_patient.id} (Visit ID: {saved_visit.id})")
 
-        # Reindex patient for RAG
-        self._index_patient_for_rag(self.current_patient.id)
+            # Reindex patient for RAG
+            self._index_patient_for_rag(self.current_patient.id)
 
-        self._update_status(f"Visit saved for {self.current_patient.name}")
-        return True
+            self._update_status(f"Visit saved for {self.current_patient.name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving visit: {e}", exc_info=True)
+            self._update_status("Error saving visit", error=True)
+            return False
 
     def _on_print_pdf(self, prescription: Prescription, chief_complaint: str) -> Optional[str]:
         """Handle PDF generation."""
         if not self.current_patient or not prescription:
+            logger.warning("PDF generation attempted without patient or prescription")
             return None
 
-        filepath = self.pdf.generate_prescription_pdf(
-            patient=self.current_patient,
-            prescription=prescription,
-            chief_complaint=chief_complaint,
-            doctor_name="Dr. ",  # TODO: Get from settings
-            clinic_name="",
-            clinic_address=""
-        )
+        try:
+            filepath = self.pdf.generate_prescription_pdf(
+                patient=self.current_patient,
+                prescription=prescription,
+                chief_complaint=chief_complaint,
+                doctor_name="Dr. ",  # TODO: Get from settings
+                clinic_name="",
+                clinic_address=""
+            )
 
-        if filepath:
-            self._update_status(f"PDF saved: {filepath}")
-        return filepath
+            if filepath:
+                logger.info(f"PDF generated: {filepath}")
+                self._update_status(f"PDF saved: {filepath}")
+            else:
+                logger.warning("PDF generation returned no filepath")
+            return filepath
+        except Exception as e:
+            logger.error(f"Error generating PDF: {e}", exc_info=True)
+            self._update_status("Error generating PDF", error=True)
+            return None
 
     def _on_rag_query(self, question: str, callback):
         """Handle RAG query."""
         if not self.current_patient:
+            logger.warning("RAG query attempted without current patient")
             callback(False, "Please select a patient first.")
             return
 
         if not self.llm.is_available():
+            logger.warning("RAG query attempted but Ollama not available")
             callback(False, "Ollama is not running. Please start Ollama first.")
             return
 
         self._update_status("Searching patient records...")
+        logger.debug(f"RAG query for patient {self.current_patient.id}: {question}")
 
         def query():
-            # Get relevant context
-            context = self.rag.query_patient_context(
-                patient_id=self.current_patient.id,
-                query=question,
-                n_results=5
-            )
+            try:
+                # Get relevant context
+                context = self.rag.query_patient_context(
+                    patient_id=self.current_patient.id,
+                    query=question,
+                    n_results=5
+                )
 
-            # Generate answer
-            success, answer = self.llm.query_patient_records(context, question)
+                # Generate answer
+                success, answer = self.llm.query_patient_records(context, question)
 
-            if self.page:
-                self.page.run_thread_safe(lambda: callback(success, answer))
-                self.page.run_thread_safe(lambda: self._update_status("Query complete"))
+                if success:
+                    logger.info("RAG query completed successfully")
+                else:
+                    logger.error(f"RAG query failed: {answer}")
+
+                if self.page:
+                    self.page.run_thread_safe(lambda: callback(success, answer))
+                    self.page.run_thread_safe(lambda: self._update_status("Query complete"))
+            except Exception as e:
+                logger.error(f"Error during RAG query: {e}", exc_info=True)
+                if self.page:
+                    self.page.run_thread_safe(lambda: callback(False, f"Error: {str(e)}"))
+                    self.page.run_thread_safe(lambda: self._update_status("Query error", error=True))
 
         threading.Thread(target=query, daemon=True).start()
 

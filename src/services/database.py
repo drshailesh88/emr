@@ -1,5 +1,6 @@
 """SQLite database service for EMR data."""
 
+import logging
 import sqlite3
 import json
 import os
@@ -9,6 +10,8 @@ from typing import List, Optional, Tuple
 from contextlib import contextmanager
 
 from ..models.schemas import Patient, Visit, Investigation, Procedure
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseService:
@@ -29,7 +32,8 @@ class DatabaseService:
         try:
             yield conn
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Database transaction error: {e}")
             conn.rollback()
             raise
         finally:
@@ -339,8 +343,8 @@ class DatabaseService:
                     if rx.get("medications"):
                         meds = [m.get("drug_name", "") for m in rx["medications"]]
                         content += f"Medications: {', '.join(meds)}. "
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Could not parse prescription JSON for visit {visit.id}: {e}")
 
             metadata = {
                 "type": "visit",

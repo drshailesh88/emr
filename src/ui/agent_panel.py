@@ -4,10 +4,13 @@ import flet as ft
 from typing import Callable, Optional, List
 from dataclasses import dataclass
 from datetime import datetime
+import logging
 
 from ..models.schemas import Patient
 from ..services.llm import LLMService
 from ..services.rag import RAGService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -166,6 +169,7 @@ class AgentPanel:
 
     def set_patient(self, patient: Patient):
         """Set the current patient context."""
+        logger.debug(f"Setting patient context in agent panel: {patient.name} (ID: {patient.id})")
         self.current_patient = patient
 
         # Update context display
@@ -174,8 +178,14 @@ class AgentPanel:
         self.patient_context.color = ft.Colors.BLUE_700
 
         # Get document count
-        doc_count = self.rag.get_patient_document_count(patient.id)
-        self.doc_count.value = f"{doc_count} records indexed"
+        try:
+            doc_count = self.rag.get_patient_document_count(patient.id)
+            self.doc_count.value = f"{doc_count} records indexed"
+            logger.info(f"Patient {patient.id} has {doc_count} records indexed for RAG")
+        except Exception as e:
+            logger.error(f"Error getting document count for patient {patient.id}: {e}", exc_info=True)
+            doc_count = 0
+            self.doc_count.value = "Error loading records"
 
         # Clear chat history (keep welcome message)
         self.messages = []
@@ -233,6 +243,7 @@ class AgentPanel:
 
     def _quick_query(self, query: str):
         """Handle quick action button click."""
+        logger.debug(f"Quick query selected: {query}")
         self.query_field.value = query
         if self.query_field.page:
             self.query_field.page.update()
@@ -248,9 +259,11 @@ class AgentPanel:
     def _send_query(self, query: str):
         """Send a query to the RAG system."""
         if not self.current_patient:
+            logger.warning("Query attempted without patient context")
             self._add_assistant_message("Please select a patient first.")
             return
 
+        logger.info(f"Sending RAG query from agent panel: {query}")
         # Add user message
         self._add_user_message(query)
 
@@ -268,8 +281,10 @@ class AgentPanel:
             self.send_btn.disabled = False
 
             if success:
+                logger.debug("RAG query successful, displaying response")
                 self._add_assistant_message(response)
             else:
+                logger.warning(f"RAG query failed: {response[:100]}")
                 self._add_assistant_message(f"Sorry, I encountered an error: {response}")
 
             if self.loading_indicator.page:
