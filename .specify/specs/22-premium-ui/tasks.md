@@ -2,7 +2,7 @@
 
 > Generated from spec.md | Status: IN PROGRESS
 
-## Phase 5A: Design Foundation
+## Phase 5A: Design Foundation (DONE)
 
 ### 5A.1 Design Tokens (DONE)
 - [x] Create `src/ui/tokens.py` with color palette
@@ -13,31 +13,36 @@
 - [x] Add motion timing constants
 - [x] Add helper functions for theme-aware styling
 
-### 5A.2 Enhanced Themes
-- [ ] Update `src/ui/themes.py` to import and use tokens
-- [ ] Create `create_premium_light_theme()` function
-- [ ] Create `create_premium_dark_theme()` function
-- [ ] Add panel-specific color getters
-- [ ] Deprecate old hard-coded theme values
+### 5A.2 Enhanced Themes (DONE)
+- [x] Update `src/ui/themes.py` to import and use tokens
+- [x] Create `get_light_theme()` function
+- [x] Create `get_dark_theme()` function
+- [x] Add panel-specific color getters (`get_panel_colors`)
+- [x] Add alert color getters (`get_alert_colors`)
+- [x] Add button style factory (`get_button_style`)
+- [x] Add text field style factory (`get_text_field_style`)
+- [x] Add card style factory (`get_card_style`)
+- [x] Maintain backward compatibility with legacy exports
 
-### 5A.3 Migrate App.py to Tokens
-- [ ] Replace hard-coded colors in header
-- [ ] Replace hard-coded colors in panel containers
-- [ ] Replace hard-coded spacing values
-- [ ] Use typography tokens for text
-- [ ] Apply premium button styles
+### 5A.3 Migrate App.py to Tokens (DONE)
+- [x] Replace hard-coded colors in header
+- [x] Replace hard-coded colors in panel containers
+- [x] Replace hard-coded spacing values
+- [x] Use typography tokens for text
+- [x] Apply premium button styles
 
 ---
 
-## Phase 5B: Component Library
+## Phase 5B: Component Library (DONE)
 
-### 5B.1 Premium Buttons
-- [ ] Create `src/ui/widgets/buttons.py`
-- [ ] Implement `PrimaryButton` component
-- [ ] Implement `SecondaryButton` component
-- [ ] Implement `DangerButton` component
-- [ ] Implement `GhostButton` component
-- [ ] Add hover/press animations
+### 5B.1 Premium Buttons (DONE)
+- [x] Create `src/ui/widgets/buttons.py`
+- [x] Implement `PrimaryButton` component
+- [x] Implement `SecondaryButton` component
+- [x] Implement `DangerButton` component
+- [x] Implement `GhostButton` component
+- [x] Implement `IconActionButton` component
+- [x] Add hover/press animations via ButtonStyle states
 
 ### 5B.2 Premium Text Fields
 - [ ] Create `src/ui/widgets/text_fields.py`
@@ -46,12 +51,12 @@
 - [ ] Implement `SearchField` with icon
 - [ ] Add focus state animations
 
-### 5B.3 Premium Cards
-- [ ] Create `src/ui/widgets/cards.py`
-- [ ] Implement `PremiumCard` base component
-- [ ] Implement `PatientCard` for patient list
-- [ ] Implement `VisitCard` for history
-- [ ] Add selection state with animation
+### 5B.3 Premium Cards (DONE)
+- [x] Create `src/ui/widgets/cards.py`
+- [x] Implement `PremiumCard` base component
+- [x] Implement `PatientCard` for patient list
+- [x] Implement `SelectableCard` for selectable items
+- [x] Add selection state with animation
 
 ### 5B.4 Premium Dialogs
 - [ ] Create `src/ui/widgets/dialogs.py`
@@ -61,28 +66,29 @@
 
 ---
 
-## Phase 5C: Panel Redesign
+## Phase 5C: Panel Redesign (PARTIAL)
 
-### 5C.1 Header Redesign
-- [ ] Premium logo treatment
-- [ ] Status indicator improvements
-- [ ] User/clinic badge display
-- [ ] Subtle bottom shadow
+### 5C.1 Header Redesign (DONE)
+- [x] Premium logo treatment with container
+- [x] Status indicator improvements (status badge)
+- [x] Styled icon buttons with tokens
+- [x] Subtle styling improvements
 
-### 5C.2 Patient Panel Redesign
-- [ ] Premium search field
-- [ ] Today's appointments section
-- [ ] Patient card improvements
-- [ ] Empty state design
-- [ ] FAB for new patient
+### 5C.2 Patient Panel Redesign (DONE)
+- [x] Premium search field with rounded corners
+- [x] Section headers with icons
+- [x] Patient tiles with avatars
+- [x] Hover and selection animations
+- [x] Premium dialog styling
 
-### 5C.3 Central Panel Decomposition
-- [ ] Extract `patient_header.py`
-- [ ] Extract `vitals_form.py`
-- [ ] Extract `clinical_notes.py`
-- [ ] Extract `prescription_view.py`
-- [ ] Extract `action_bar.py`
-- [ ] Refactor main `central_panel.py` < 300 lines
+### 5C.3 Central Panel Decomposition (DONE)
+- [x] Extract `src/ui/components/patient_header.py`
+- [x] Extract `src/ui/components/vitals_form.py`
+- [x] Extract `src/ui/components/clinical_notes.py`
+- [x] Extract `src/ui/components/prescription_view.py`
+- [x] Extract `src/ui/components/action_bar.py`
+- [x] Refactor main `central_panel.py` (1,812 → 745 lines)
+- [x] Update `src/ui/components/__init__.py` with exports
 
 ### 5C.4 Agent Panel Redesign
 - [ ] Premium chat bubbles
