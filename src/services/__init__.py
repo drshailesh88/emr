@@ -2,7 +2,6 @@
 
 # Database
 from .database import DatabaseService
-<<<<<<< HEAD
 
 # LLM (optional - requires Ollama)
 try:
