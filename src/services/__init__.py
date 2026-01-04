@@ -2,6 +2,7 @@
 
 # Database
 from .database import DatabaseService
+<<<<<<< HEAD
 
 # LLM (optional - requires Ollama)
 try:
@@ -53,6 +54,38 @@ from .app_mode import (
     can_use_rag,
 )
 
+# Backup and Cloud Sync
+try:
+    from .backup import BackupService, BackupInfo
+    from .crypto import CryptoService, EncryptedData, DecryptionError, is_crypto_available
+    from .sync import (
+        SyncService, SyncStatus, SyncProgress,
+        StorageBackend, LocalStorageBackend, S3StorageBackend, DocAssistCloudBackend,
+        get_or_create_device_id
+    )
+    from .settings import SettingsService, BackupSettings, DoctorSettings, AppSettings
+    from .scheduler import BackupScheduler
+except ImportError:
+    BackupService = None
+    BackupInfo = None
+    CryptoService = None
+    EncryptedData = None
+    DecryptionError = None
+    is_crypto_available = None
+    SyncService = None
+    SyncStatus = None
+    SyncProgress = None
+    StorageBackend = None
+    LocalStorageBackend = None
+    S3StorageBackend = None
+    DocAssistCloudBackend = None
+    get_or_create_device_id = None
+    SettingsService = None
+    BackupSettings = None
+    DoctorSettings = None
+    AppSettings = None
+    BackupScheduler = None
+
 __all__ = [
     # Database
     "DatabaseService",
@@ -85,4 +118,24 @@ __all__ = [
     "get_capabilities",
     "can_use_llm",
     "can_use_rag",
+    # Backup
+    "BackupService",
+    "BackupInfo",
+    "CryptoService",
+    "EncryptedData",
+    "DecryptionError",
+    "is_crypto_available",
+    "SyncService",
+    "SyncStatus",
+    "SyncProgress",
+    "StorageBackend",
+    "LocalStorageBackend",
+    "S3StorageBackend",
+    "DocAssistCloudBackend",
+    "get_or_create_device_id",
+    "SettingsService",
+    "BackupSettings",
+    "DoctorSettings",
+    "AppSettings",
+    "BackupScheduler",
 ]

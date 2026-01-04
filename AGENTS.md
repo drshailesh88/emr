@@ -99,4 +99,32 @@ right AI assistant for RAG queries.
 ## Development Guidance
 - Keep service boundaries: UI calls DatabaseService, LLMService, RAGService, PDFService.
 - Keep prompt templates in `prompts/` and load via `src/services/llm.py`.
-- Keep data local in `data/`; do not add remote dependencies or APIs.
+- Keep data local in `data/`; backup service is the only optional remote dependency.
+
+## Development Toolkit (MANDATORY)
+
+**IMPORTANT**: Always use these tools for complex development tasks.
+
+### Spec-Kit (Specification-Driven Development)
+- Source: https://github.com/github/spec-kit
+- Install: `uvx specify` or `uv tool install specify`
+- Commands: `/speckit.constitution`, `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`
+- When to use: New features, major refactors, unclear requirements
+
+### Ralph Wiggum (Iterative Loop Development)
+- Source: https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum
+- Commands: `/ralph-loop "<prompt>" --max-iterations <n> --completion-promise "<text>"`, `/cancel-ralph`
+- When to use: TDD cycles, bug fixing loops, iterative refinement
+
+## Cloud Backup Strategy (E2E Encrypted)
+
+Architecture: WhatsApp-style zero-knowledge encryption
+- Client-side encryption with PyNaCl (AES-256-GCM)
+- Key derived from password via Argon2
+- Server stores only encrypted blobs (cannot decrypt)
+- Optional feature: core app works fully offline
+
+Implementation modules:
+- src/services/backup.py — Backup creation, encryption, chunking
+- src/services/crypto.py — PyNaCl encryption, Argon2 key derivation
+- src/services/sync.py — Cloud upload/download, conflict resolution
