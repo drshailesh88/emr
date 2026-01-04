@@ -146,11 +146,14 @@ docassist/
 
 ## Development Toolkit (MANDATORY)
 
-**IMPORTANT**: Always use these tools for complex development tasks. Re-read this section when context resets.
+> **CRITICAL REMINDER**: On every context reset, RE-READ THIS SECTION FIRST.
+> These tools are REQUIRED for all significant development work on this project.
+> DO NOT start implementing features without using spec-kit for planning.
 
 ### Spec-Kit (Specification-Driven Development)
 - **Source**: https://github.com/github/spec-kit
 - **Install**: `uvx specify` or `uv tool install specify`
+- **Specs Location**: `.specify/specs/` — All feature specifications live here
 - **Commands**:
   - `/speckit.constitution` — Establish project governance
   - `/speckit.specify` — Define requirements and user stories
@@ -158,6 +161,7 @@ docassist/
   - `/speckit.tasks` — Generate actionable task lists
   - `/speckit.implement` — Execute the complete build
 - **When to use**: New features, major refactors, unclear requirements
+- **Always check**: `.specify/ROADMAP.md` for current project state
 
 ### Ralph Wiggum (Iterative Loop Development)
 - **Source**: https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum
@@ -167,6 +171,33 @@ docassist/
   - `/cancel-ralph` — Stop an active loop
 - **When to use**: TDD cycles, bug fixing loops, iterative refinement
 - **Best for**: Tasks with clear completion criteria (tests pass, linter clean)
+
+### Development Workflow
+1. **Before any major feature**: Create spec in `.specify/specs/XX-feature-name/spec.md`
+2. **For iterative tasks**: Use ralph-loop with clear completion promise
+3. **Always test**: Run `pytest tests/` after changes
+4. **Check roadmap**: Verify feature aligns with current phase
+
+## Premium UI Philosophy (CRITICAL)
+
+> **Goal**: Create a habit-forming product that feels like Apple, Mercedes, Nike — not generic software.
+
+### Design Principles
+1. **Quiet Luxury**: Restrained palette, generous whitespace, subtle depth
+2. **Professional Authority**: Medical-grade precision, clear hierarchy
+3. **Effortless Flow**: Zero cognitive friction, natural eye movement
+
+### UI Implementation Rules
+1. **NEVER use hard-coded colors** — Always use design tokens from `src/ui/tokens.py`
+2. **NEVER use magic numbers** — Use spacing scale (4, 8, 12, 16, 24, 32px)
+3. **Component files < 300 lines** — Extract sub-components when growing
+4. **Premium animations** — Subtle hover, smooth transitions, micro-interactions
+5. **Consistent typography** — Use typography scale, not arbitrary font sizes
+
+### Current UI Spec
+- See: `.specify/specs/22-premium-ui/spec.md`
+- Design tokens: `src/ui/tokens.py`
+- Theme system: `src/ui/themes.py`
 
 ## Cloud Backup Strategy (E2E Encrypted)
 
