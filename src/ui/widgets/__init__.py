@@ -25,6 +25,14 @@ from .text_fields import (
     ChatInputField,
 )
 
+from .dialogs import (
+    PremiumDialog,
+    ConfirmDialog,
+    FormDialog,
+    SuccessDialog,
+    InfoDialog,
+)
+
 __all__ = [
     # Buttons
     'PrimaryButton',
@@ -43,4 +51,11 @@ __all__ = [
     'PremiumSearchField',
     'PremiumTextArea',
     'ChatInputField',
+
+    # Dialogs
+    'PremiumDialog',
+    'ConfirmDialog',
+    'FormDialog',
+    'SuccessDialog',
+    'InfoDialog',
 ]

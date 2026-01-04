@@ -59,11 +59,14 @@
 - [x] Implement `SelectableCard` for selectable items
 - [x] Add selection state with animation
 
-### 5B.4 Premium Dialogs
-- [ ] Create `src/ui/widgets/dialogs.py`
-- [ ] Implement `PremiumDialog` with backdrop
-- [ ] Add entrance/exit animations
-- [ ] Standardize button placement
+### 5B.4 Premium Dialogs (DONE)
+- [x] Create `src/ui/widgets/dialogs.py`
+- [x] Implement `PremiumDialog` base factory
+- [x] Implement `ConfirmDialog` for confirmations
+- [x] Implement `FormDialog` helper for forms
+- [x] Implement `SuccessDialog` and `InfoDialog`
+- [x] Update existing `dialogs.py` with premium styling
+- [x] Standardize button placement and styling
 
 ---
 
