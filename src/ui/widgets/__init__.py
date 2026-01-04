@@ -33,6 +33,19 @@ from .dialogs import (
     InfoDialog,
 )
 
+from .micro_interactions import (
+    SkeletonLoader,
+    SkeletonText,
+    SkeletonCard,
+    LoadingOverlay,
+    SuccessFeedback,
+    ErrorFeedback,
+    InfoBanner,
+    PulsingDot,
+    AnimatedCounter,
+    ProgressIndicator,
+)
+
 __all__ = [
     # Buttons
     'PrimaryButton',
@@ -58,4 +71,16 @@ __all__ = [
     'FormDialog',
     'SuccessDialog',
     'InfoDialog',
+
+    # Micro-interactions
+    'SkeletonLoader',
+    'SkeletonText',
+    'SkeletonCard',
+    'LoadingOverlay',
+    'SuccessFeedback',
+    'ErrorFeedback',
+    'InfoBanner',
+    'PulsingDot',
+    'AnimatedCounter',
+    'ProgressIndicator',
 ]

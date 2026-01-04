@@ -104,13 +104,17 @@
 
 ---
 
-## Phase 5D: Micro-Interactions
+## Phase 5D: Micro-Interactions (DONE)
 
-- [ ] Button hover animations
-- [ ] Card selection transitions
-- [ ] Loading skeleton loaders
-- [ ] Success/error feedback animations
-- [ ] Tab switch animations
+- [x] Button hover/press animations (via ft.ControlState in buttons.py)
+- [x] Card selection transitions (via animate property in cards.py)
+- [x] Loading skeleton components (SkeletonLoader, SkeletonCard, SkeletonText)
+- [x] Success/error feedback (SuccessFeedback, ErrorFeedback components)
+- [x] Loading overlay (LoadingOverlay component)
+- [x] Info banner component
+- [x] Pulsing dot indicator
+- [x] Animated counter
+- [x] Progress indicator
 
 ---
 
