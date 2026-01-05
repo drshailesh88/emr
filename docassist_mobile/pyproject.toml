@@ -1,0 +1,107 @@
+[project]
+name = "DocAssist Mobile"
+version = "1.0.0"
+description = "Privacy-first mobile EMR for Indian doctors"
+authors = [{name = "DocAssist Technologies", email = "tech@docassist.app"}]
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Proprietary"}
+
+dependencies = [
+    "flet>=0.25.0",
+    "pynacl>=1.5.0",
+    "pydantic>=2.0.0",
+    "requests>=2.31.0",
+    "python-dateutil>=2.8.2",
+    "keyring>=24.0.0",
+]
+
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flet]
+# App metadata
+app_name = "DocAssist"
+app_description = "Privacy-first EMR for Indian doctors"
+app_version = "1.0.0"
+app_build_number = 1
+
+# Organization
+org_name = "DocAssist Technologies Pvt Ltd"
+org_domain = "app.docassist"
+
+# Android configuration
+[tool.flet.android]
+package_name = "app.docassist.mobile"
+min_sdk_version = 21
+target_sdk_version = 34
+compile_sdk_version = 34
+
+# Permissions
+permissions = [
+    "android.permission.INTERNET",
+    "android.permission.CAMERA",  # Optional: for future features
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.USE_BIOMETRIC",  # For fingerprint/face unlock
+    "android.permission.VIBRATE",  # For haptic feedback
+]
+
+# Optional permissions (user can deny)
+optional_permissions = [
+    "android.permission.CAMERA",
+]
+
+# iOS configuration
+[tool.flet.ios]
+bundle_id = "app.docassist.mobile"
+deployment_target = "13.0"
+team_id = ""  # Add your Apple Developer Team ID
+
+# Permissions (iOS Info.plist)
+permissions = [
+    "NSCameraUsageDescription: Scan patient documents and lab reports",
+    "NSPhotoLibraryUsageDescription: Save and share prescription PDFs",
+    "NSMicrophoneUsageDescription: Voice-to-text clinical notes",
+    "NSFaceIDUsageDescription: Unlock app with Face ID",
+]
+
+# Web configuration (optional)
+[tool.flet.web]
+output_dir = "build/web"
+route_url_strategy = "path"
+
+# Build settings
+[tool.flet.build]
+# Assets to include
+include_packages = [
+    "src",
+    "assets",
+]
+
+# Exclude from build
+exclude = [
+    "tests",
+    "*.md",
+    ".git",
+    ".env",
+    "__pycache__",
+    "*.pyc",
+]
+
+# Splash screen configuration
+[tool.flet.splash]
+color = "#0066CC"  # Primary brand color
+image = "assets/splash/splash.png"
+android_12 = true  # Use Android 12+ splash API
+
+# App icons
+[tool.flet.icons]
+# Android
+android_icon = "assets/icons/icon.png"
+android_adaptive_foreground = "assets/icons/adaptive_foreground.png"
+android_adaptive_background = "#0066CC"
+
+# iOS
+ios_icon = "assets/icons/icon.png"

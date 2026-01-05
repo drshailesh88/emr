@@ -2,7 +2,6 @@
 
 # Database
 from .database import DatabaseService
-<<<<<<< HEAD
 
 # LLM (optional - requires Ollama)
 try:
@@ -54,37 +53,74 @@ from .app_mode import (
     can_use_rag,
 )
 
-# Backup and Cloud Sync
-try:
-    from .backup import BackupService, BackupInfo
-    from .crypto import CryptoService, EncryptedData, DecryptionError, is_crypto_available
-    from .sync import (
-        SyncService, SyncStatus, SyncProgress,
-        StorageBackend, LocalStorageBackend, S3StorageBackend, DocAssistCloudBackend,
-        get_or_create_device_id
-    )
-    from .settings import SettingsService, BackupSettings, DoctorSettings, AppSettings
-    from .scheduler import BackupScheduler
-except ImportError:
-    BackupService = None
-    BackupInfo = None
-    CryptoService = None
-    EncryptedData = None
-    DecryptionError = None
-    is_crypto_available = None
-    SyncService = None
-    SyncStatus = None
-    SyncProgress = None
-    StorageBackend = None
-    LocalStorageBackend = None
-    S3StorageBackend = None
-    DocAssistCloudBackend = None
-    get_or_create_device_id = None
-    SettingsService = None
-    BackupSettings = None
-    DoctorSettings = None
-    AppSettings = None
-    BackupScheduler = None
+# Backup and Cloud Sync - deferred imports to avoid crypto crashes
+BackupService = None
+BackupInfo = None
+CryptoService = None
+EncryptedData = None
+DecryptionError = None
+is_crypto_available = None
+SyncService = None
+SyncStatus = None
+SyncProgress = None
+StorageBackend = None
+LocalStorageBackend = None
+S3StorageBackend = None
+DocAssistCloudBackend = None
+get_or_create_device_id = None
+SettingsService = None
+BackupSettings = None
+DoctorSettings = None
+AppSettings = None
+BackupScheduler = None
+
+def _load_backup_services():
+    """Load backup services lazily to avoid crypto crashes at import time."""
+    global BackupService, BackupInfo, CryptoService, EncryptedData, DecryptionError
+    global is_crypto_available, SyncService, SyncStatus, SyncProgress
+    global StorageBackend, LocalStorageBackend, S3StorageBackend, DocAssistCloudBackend
+    global get_or_create_device_id, SettingsService, BackupSettings, DoctorSettings
+    global AppSettings, BackupScheduler
+
+    try:
+        from .backup import BackupService as _BackupService, BackupInfo as _BackupInfo
+        from .crypto import CryptoService as _CryptoService, EncryptedData as _EncryptedData
+        from .crypto import DecryptionError as _DecryptionError, is_crypto_available as _is_crypto_available
+        from .sync import (
+            SyncService as _SyncService, SyncStatus as _SyncStatus, SyncProgress as _SyncProgress,
+            StorageBackend as _StorageBackend, LocalStorageBackend as _LocalStorageBackend,
+            S3StorageBackend as _S3StorageBackend, DocAssistCloudBackend as _DocAssistCloudBackend,
+            get_or_create_device_id as _get_or_create_device_id
+        )
+        from .settings import SettingsService as _SettingsService, BackupSettings as _BackupSettings
+        from .settings import DoctorSettings as _DoctorSettings, AppSettings as _AppSettings
+        from .scheduler import BackupScheduler as _BackupScheduler
+
+        BackupService = _BackupService
+        BackupInfo = _BackupInfo
+        CryptoService = _CryptoService
+        EncryptedData = _EncryptedData
+        DecryptionError = _DecryptionError
+        is_crypto_available = _is_crypto_available
+        SyncService = _SyncService
+        SyncStatus = _SyncStatus
+        SyncProgress = _SyncProgress
+        StorageBackend = _StorageBackend
+        LocalStorageBackend = _LocalStorageBackend
+        S3StorageBackend = _S3StorageBackend
+        DocAssistCloudBackend = _DocAssistCloudBackend
+        get_or_create_device_id = _get_or_create_device_id
+        SettingsService = _SettingsService
+        BackupSettings = _BackupSettings
+        DoctorSettings = _DoctorSettings
+        AppSettings = _AppSettings
+        BackupScheduler = _BackupScheduler
+        return True
+    except Exception:
+        return False
+
+# Note: Call _load_backup_services() manually when backup features are needed
+# This avoids crashes from broken crypto libraries at import time
 
 __all__ = [
     # Database

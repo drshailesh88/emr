@@ -8,6 +8,12 @@ import threading
 
 from ..services.backup import BackupService, BackupInfo
 from ..services.crypto import is_crypto_available, get_crypto_backend, CryptoService
+from ..services.cloud_backup_manager import CloudBackupManager
+from .cloud.cloud_setup_wizard import show_cloud_setup_wizard
+from .cloud.cloud_status_panel import CloudStatusPanel
+from .cloud.encryption_key_dialog import show_encryption_key_dialog
+from .cloud.restore_from_cloud import show_restore_from_cloud
+from .cloud.sync_conflict_dialog import show_sync_conflict_dialog
 
 
 class BackupDialog:
@@ -19,6 +25,7 @@ class BackupDialog:
         backup_service: BackupService,
         scheduler=None,
         settings_service=None,
+        cloud_backup_manager: Optional[CloudBackupManager] = None,
         on_close: Optional[Callable] = None
     ):
         """Initialize backup dialog.
@@ -28,12 +35,14 @@ class BackupDialog:
             backup_service: Backup service instance
             scheduler: BackupScheduler instance (optional)
             settings_service: SettingsService instance (optional)
+            cloud_backup_manager: CloudBackupManager instance (optional)
             on_close: Callback when dialog closes
         """
         self.page = page
         self.backup_service = backup_service
         self.scheduler = scheduler
         self.settings_service = settings_service
+        self.cloud_backup_manager = cloud_backup_manager
         self.on_close = on_close
 
         # UI state
@@ -288,86 +297,145 @@ class BackupDialog:
             self.s3_endpoint,
         ], visible=False)
 
+        # Build cloud tab with new components
+        cloud_tab_content = []
+
+        # Check if cloud is configured
+        if self.settings_service:
+            backup_settings = self.settings_service.get_backup_settings()
+            cloud_configured = backup_settings.cloud_sync_enabled and backup_settings.cloud_config
+
+            if cloud_configured:
+                # Show cloud status panel
+                try:
+                    status_panel = CloudStatusPanel(
+                        settings_service=self.settings_service,
+                        cloud_backup_manager=self.cloud_backup_manager,
+                        on_sync_click=lambda: self._on_sync_to_cloud(None),
+                        on_settings_click=lambda: self._on_cloud_setup_wizard(),
+                    )
+                    cloud_tab_content.append(status_panel)
+                    cloud_tab_content.append(ft.Divider())
+                except Exception as ex:
+                    print(f"Error creating cloud status panel: {ex}")
+
+        # Cloud actions
+        cloud_tab_content.extend([
+            ft.Text("Cloud Backup Actions", size=16, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                "All data is encrypted before upload. Zero-knowledge security.",
+                size=11,
+                color=ft.Colors.GREEN_700,
+                italic=True,
+            ),
+            ft.Divider(),
+
+            # Quick setup wizard button
+            ft.ElevatedButton(
+                "Setup Cloud Backup",
+                icon=ft.Icons.CLOUD_UPLOAD,
+                on_click=lambda e: self._on_cloud_setup_wizard(),
+            ),
+
+            ft.Divider(),
+
+            # Action buttons
+            ft.Row([
+                ft.ElevatedButton(
+                    "Sync Now",
+                    icon=ft.Icons.SYNC,
+                    on_click=self._on_sync_to_cloud,
+                    disabled=not crypto_available,
+                ),
+                ft.OutlinedButton(
+                    "Restore from Cloud",
+                    icon=ft.Icons.CLOUD_DOWNLOAD,
+                    on_click=lambda e: self._on_restore_from_cloud(),
+                ),
+            ], spacing=10),
+
+            ft.Divider(),
+
+            # Advanced actions
+            ft.Text("Advanced", size=14, weight=ft.FontWeight.W_500),
+            ft.Row([
+                ft.OutlinedButton(
+                    "Generate Recovery Key",
+                    icon=ft.Icons.KEY,
+                    on_click=lambda e: self._on_show_encryption_key(),
+                ),
+                ft.OutlinedButton(
+                    "Test Connection",
+                    icon=ft.Icons.WIFI_TETHERING,
+                    on_click=lambda e: self._on_test_cloud_connection(),
+                ),
+            ], spacing=10),
+
+            ft.Divider(),
+
+            # Manual configuration (for advanced users)
+            ft.ExpansionTile(
+                title=ft.Text("Manual Configuration", size=13),
+                subtitle=ft.Text("For advanced users", size=11, color=ft.Colors.GREY_600),
+                initially_expanded=False,
+                controls=[
+                    ft.Column([
+                        ft.Row([
+                            self.storage_backend,
+                            self.cloud_status,
+                        ], spacing=20),
+                        self.cloud_api_key,
+                        self.s3_config_container,
+                        self.local_path,
+                    ], spacing=10),
+                ],
+            ),
+
+            ft.Divider(),
+
+            # Pricing info
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("DocAssist Cloud Pricing", weight=ft.FontWeight.W_500, size=12),
+                    ft.DataTable(
+                        columns=[
+                            ft.DataColumn(ft.Text("Tier", size=11)),
+                            ft.DataColumn(ft.Text("Storage", size=11)),
+                            ft.DataColumn(ft.Text("Price", size=11)),
+                        ],
+                        rows=[
+                            ft.DataRow(cells=[
+                                ft.DataCell(ft.Text("Free", size=11)),
+                                ft.DataCell(ft.Text("1 GB", size=11)),
+                                ft.DataCell(ft.Text("₹0", size=11)),
+                            ]),
+                            ft.DataRow(cells=[
+                                ft.DataCell(ft.Text("Essential", size=11)),
+                                ft.DataCell(ft.Text("10 GB", size=11)),
+                                ft.DataCell(ft.Text("₹199/mo", size=11)),
+                            ]),
+                            ft.DataRow(cells=[
+                                ft.DataCell(ft.Text("Professional", size=11)),
+                                ft.DataCell(ft.Text("50 GB", size=11)),
+                                ft.DataCell(ft.Text("₹499/mo", size=11)),
+                            ]),
+                            ft.DataRow(cells=[
+                                ft.DataCell(ft.Text("Clinic", size=11)),
+                                ft.DataCell(ft.Text("200 GB", size=11)),
+                                ft.DataCell(ft.Text("₹2,499/mo", size=11)),
+                            ]),
+                        ],
+                        heading_row_height=30,
+                        data_row_min_height=25,
+                        data_row_max_height=30,
+                    ),
+                ], spacing=5),
+                padding=ft.padding.only(top=10),
+            ),
+        ])
+
         cloud_tab = ft.Container(
-            content=ft.Column([
-                ft.Text("Cloud Backup", size=16, weight=ft.FontWeight.BOLD),
-                ft.Text(
-                    "All data is encrypted before upload. We cannot see your data.",
-                    size=11,
-                    color=ft.Colors.GREEN_700,
-                    italic=True,
-                ),
-                ft.Divider(),
-
-                ft.Row([
-                    self.storage_backend,
-                    self.cloud_status,
-                ], spacing=20, alignment=ft.MainAxisAlignment.START),
-
-                # DocAssist cloud config
-                self.cloud_api_key,
-
-                # S3 config (hidden by default)
-                self.s3_config_container,
-
-                # Local path (hidden by default)
-                self.local_path,
-
-                ft.Divider(),
-
-                ft.Row([
-                    ft.ElevatedButton(
-                        "Sync to Cloud",
-                        icon=ft.Icons.CLOUD_UPLOAD,
-                        on_click=self._on_sync_to_cloud,
-                        disabled=not crypto_available,
-                    ),
-                    ft.OutlinedButton(
-                        "List Cloud Backups",
-                        icon=ft.Icons.CLOUD_DOWNLOAD,
-                        on_click=self._on_list_cloud_backups,
-                    ),
-                ], spacing=10),
-
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text("Pricing:", weight=ft.FontWeight.W_500, size=12),
-                        ft.DataTable(
-                            columns=[
-                                ft.DataColumn(ft.Text("Tier", size=11)),
-                                ft.DataColumn(ft.Text("Storage", size=11)),
-                                ft.DataColumn(ft.Text("Price", size=11)),
-                            ],
-                            rows=[
-                                ft.DataRow(cells=[
-                                    ft.DataCell(ft.Text("Free", size=11)),
-                                    ft.DataCell(ft.Text("1 GB", size=11)),
-                                    ft.DataCell(ft.Text("₹0", size=11)),
-                                ]),
-                                ft.DataRow(cells=[
-                                    ft.DataCell(ft.Text("Basic", size=11)),
-                                    ft.DataCell(ft.Text("10 GB", size=11)),
-                                    ft.DataCell(ft.Text("₹99/mo", size=11)),
-                                ]),
-                                ft.DataRow(cells=[
-                                    ft.DataCell(ft.Text("Pro", size=11)),
-                                    ft.DataCell(ft.Text("50 GB", size=11)),
-                                    ft.DataCell(ft.Text("₹299/mo", size=11)),
-                                ]),
-                                ft.DataRow(cells=[
-                                    ft.DataCell(ft.Text("Clinic", size=11)),
-                                    ft.DataCell(ft.Text("200 GB", size=11)),
-                                    ft.DataCell(ft.Text("₹999/mo", size=11)),
-                                ]),
-                            ],
-                            heading_row_height=30,
-                            data_row_min_height=25,
-                            data_row_max_height=30,
-                        ),
-                    ], spacing=5),
-                    padding=ft.padding.only(top=10),
-                ),
-            ], spacing=10, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(cloud_tab_content, spacing=10, scroll=ft.ScrollMode.AUTO),
             padding=15,
         )
 
@@ -740,8 +808,74 @@ class BackupDialog:
 
     def _on_list_cloud_backups(self, e):
         """Handle list cloud backups."""
-        # TODO: Implement cloud backup listing dialog
-        self._show_snackbar("Cloud backup listing coming soon!")
+        self._on_restore_from_cloud()
+
+    def _on_cloud_setup_wizard(self):
+        """Show cloud setup wizard."""
+        if not self.settings_service:
+            self._show_snackbar("Settings service not available", error=True)
+            return
+
+        def on_complete(config):
+            self._show_snackbar("Cloud backup configured successfully!")
+            # Refresh dialog if needed
+            pass
+
+        show_cloud_setup_wizard(self.page, self.settings_service, on_complete)
+
+    def _on_restore_from_cloud(self):
+        """Show restore from cloud dialog."""
+        if not self.settings_service:
+            self._show_snackbar("Settings service not available", error=True)
+            return
+
+        def on_complete():
+            self._show_snackbar("Restore complete! Please restart the app.")
+
+        show_restore_from_cloud(
+            self.page,
+            self.backup_service,
+            self.settings_service,
+            on_complete
+        )
+
+    def _on_show_encryption_key(self):
+        """Show encryption key dialog."""
+        def on_save(key_type, key_value):
+            self._show_snackbar(f"{key_type.title()} key saved!")
+
+        show_encryption_key_dialog(
+            self.page,
+            key_type="recovery",
+            on_save=on_save
+        )
+
+    def _on_test_cloud_connection(self):
+        """Test cloud connection."""
+        if not self.settings_service or not self.cloud_backup_manager:
+            self._show_snackbar("Cloud backup not configured", error=True)
+            return
+
+        # Get backend config
+        settings = self.settings_service.get_backup_settings()
+        if not settings.cloud_config:
+            self._show_snackbar("Please configure cloud storage first", error=True)
+            return
+
+        backend_config = settings.cloud_config.copy()
+        backend_config['type'] = settings.cloud_backend_type
+
+        # Test connection in background
+        def do_test():
+            success, error = self.cloud_backup_manager.test_connection(backend_config)
+            if self.page:
+                if success:
+                    self.page.run_thread_safe(lambda: self._show_snackbar("Connection test successful!"))
+                else:
+                    self.page.run_thread_safe(lambda: self._show_snackbar(f"Connection test failed: {error}", error=True))
+
+        self._show_snackbar("Testing connection...")
+        threading.Thread(target=do_test, daemon=True).start()
 
     def _on_generate_recovery_key(self, e):
         """Generate a new recovery key."""
@@ -903,7 +1037,13 @@ class BackupDialog:
         self.page.update()
 
 
-def show_backup_dialog(page: ft.Page, backup_service: BackupService, scheduler=None, settings_service=None):
+def show_backup_dialog(
+    page: ft.Page,
+    backup_service: BackupService,
+    scheduler=None,
+    settings_service=None,
+    cloud_backup_manager: Optional[CloudBackupManager] = None
+):
     """Show the backup dialog.
 
     Args:
@@ -911,5 +1051,6 @@ def show_backup_dialog(page: ft.Page, backup_service: BackupService, scheduler=N
         backup_service: Backup service instance
         scheduler: BackupScheduler instance (optional)
         settings_service: SettingsService instance (optional)
+        cloud_backup_manager: CloudBackupManager instance (optional)
     """
-    BackupDialog(page, backup_service, scheduler, settings_service)
+    BackupDialog(page, backup_service, scheduler, settings_service, cloud_backup_manager)

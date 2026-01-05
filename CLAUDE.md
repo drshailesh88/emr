@@ -1,8 +1,12 @@
 # DocAssist EMR - Local-First AI-Powered EMR
 
+> **⚠️ CONTEXT RESET REMINDER**: When your context resets, immediately re-read the **Development Toolkit (MANDATORY)** section below. Use Spec-Kit for planning and Ralph Wiggum for iterative development.
+
 ## Project Vision
 A local-first EMR for Indian doctors that runs entirely offline with local LLM.
 Core differentiator: Natural language search and RAG on patient records.
+
+**Goal**: Change the practice of a million doctors from pen-and-paper to digital EMR by making adoption frictionless and the experience premium.
 
 ## Instruction Sync
 - Any change to project instructions must be replicated across `CLAUDE.md`, `AGENTS.md`, `CODEX.md`, `GEMINI.md`, and `GROK.md`.
@@ -146,7 +150,7 @@ docassist/
 
 ## Development Toolkit (MANDATORY)
 
-**IMPORTANT**: Always use these tools for complex development tasks. Re-read this section when context resets.
+> **🔴 CRITICAL**: These tools are REQUIRED for all complex development. If you're about to implement a feature, refactor code, or fix bugs — STOP and use these tools first. Re-read this section after every context reset.
 
 ### Spec-Kit (Specification-Driven Development)
 - **Source**: https://github.com/github/spec-kit
@@ -158,6 +162,7 @@ docassist/
   - `/speckit.tasks` — Generate actionable task lists
   - `/speckit.implement` — Execute the complete build
 - **When to use**: New features, major refactors, unclear requirements
+- **Workflow**: Always run `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` before coding
 
 ### Ralph Wiggum (Iterative Loop Development)
 - **Source**: https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum
@@ -167,6 +172,17 @@ docassist/
   - `/cancel-ralph` — Stop an active loop
 - **When to use**: TDD cycles, bug fixing loops, iterative refinement
 - **Best for**: Tasks with clear completion criteria (tests pass, linter clean)
+- **Example**: `/ralph-loop "fix all type errors" --max-iterations 10 --completion-promise "0 errors"`
+
+### Decision Matrix
+| Situation | Use This Tool |
+|-----------|---------------|
+| New feature request | Spec-Kit (`/speckit.specify`) |
+| Bug that needs investigation | Spec-Kit (`/speckit.plan`) |
+| Tests failing in loop | Ralph Wiggum |
+| Linter errors to fix | Ralph Wiggum |
+| Architecture decision | Spec-Kit (`/speckit.constitution`) |
+| Refactoring existing code | Spec-Kit → Ralph Wiggum |
 
 ## Cloud Backup Strategy (E2E Encrypted)
 
@@ -206,13 +222,16 @@ Doctor's Device                    DocAssist Cloud
 4. **Optional feature**: Core app works fully offline without backup
 5. **BYOS support**: Doctors can use their own S3/Backblaze/Google Drive
 
-### Pricing Tiers (Future)
-| Tier   | Storage | Price    | Features                    |
-|--------|---------|----------|-----------------------------|
-| Free   | 1 GB    | ₹0       | Manual backup, BYOS         |
-| Basic  | 10 GB   | ₹99/mo   | Auto-backup, 30-day history |
-| Pro    | 50 GB   | ₹299/mo  | + Multi-device sync         |
-| Clinic | 200 GB  | ₹999/mo  | + 5 users, audit log        |
+### Pricing Tiers
+| Tier | Storage | Price | Features |
+|------|---------|-------|----------|
+| Free | 1 GB | ₹0 | Desktop app, local backup, local AI, BYOS |
+| Essential | 10 GB | ₹199/mo | + Cloud backup, mobile sync, 30-day history |
+| Professional | 50 GB | ₹499/mo | + Cloud AI, SMS reminders, priority support |
+| Clinic | 200 GB | ₹2,499/mo | + 5 users, audit dashboard, admin controls |
+| Hospital | 1 TB | ₹9,999/mo | + Unlimited users, on-premise option, SLA |
+
+*Early adopter pricing locked for first 1,000 users. Prices may increase for new subscribers.*
 
 ## Prescription JSON Schema
 ```json
@@ -235,3 +254,136 @@ Doctor's Device                    DocAssist Cloud
   "red_flags": ["Chest pain", "Breathlessness"]
 }
 ```
+
+## Mobile App Strategy (DocAssist Mobile)
+
+### Strategic Rationale
+Indian doctors need EMR access anywhere — at home, in satellite clinics, during emergencies. A mobile companion app removes the "I'm not at my desk" friction that prevents EMR adoption.
+
+### Privacy-First Architecture Decision
+
+**Recommended: Tiered Privacy Model**
+
+| Tier | Name | LLM Location | Privacy Level | Target User |
+|------|------|--------------|---------------|-------------|
+| 1 | Mobile Lite | None | Maximum | Privacy-purists, view-only use |
+| 2 | Mobile Pro | On-device (Gemma 2B) | High | Full offline capability |
+| 3 | Mobile Cloud | Cloud API (opt-in) | Moderate* | Speed-focused, explicit consent |
+
+*Cloud tier requires explicit user consent with clear privacy warnings
+
+### Tier 1: DocAssist Mobile Lite (Recommended MVP)
+- **Philosophy**: Read-heavy, write-light companion
+- **Features**:
+  - View patient records (synced via E2E encrypted backup)
+  - Quick patient search (local SQLite, no LLM needed)
+  - Add appointment / call patient shortcuts
+  - View today's schedule
+  - Emergency patient lookup
+  - Share prescription PDF (already generated on desktop)
+- **No LLM**: All AI features require desktop
+- **Privacy**: Maximum — no patient data leaves device, no cloud AI
+- **Best for**: Quick reference between consultations
+
+### Tier 2: DocAssist Mobile Pro (Future)
+- **On-device LLM**: Gemma 2B (~1.5GB) via llama.cpp or MLC-LLM
+- **Features**:
+  - Everything in Lite, plus:
+  - AI-powered natural language patient search
+  - Quick prescription generation (small model, simpler output)
+  - Voice-to-text clinical notes
+- **Trade-offs**:
+  - Slower inference (2-5 seconds)
+  - Battery drain during LLM use
+  - Limited context window
+- **Privacy**: High — all processing on-device
+
+### Tier 3: DocAssist Mobile Cloud (Optional Add-on)
+- **Cloud LLM**: API calls to privacy-respecting service
+- **Explicit Consent Flow**:
+  ```
+  ⚠️ This feature sends anonymized patient context to our AI service.
+  - Patient names are replaced with [Patient]
+  - Phone numbers and addresses are removed
+  - Only clinical context is sent
+
+  Do you consent? [Yes, I understand] [No, use offline mode]
+  ```
+- **Best for**: Doctors who prioritize speed over maximum privacy
+- **Revenue opportunity**: Premium subscription tier
+
+### Mobile Tech Stack
+```
+Framework: Flet (same as desktop, compiles to iOS/Android)
+Database: SQLite (local, synced from desktop backup)
+Sync: E2E encrypted cloud backup (already implemented)
+LLM (Tier 2): llama.cpp / MLC-LLM with Gemma 2B
+Voice: Whisper.cpp (on-device) or iOS/Android native
+```
+
+### Data Sync Architecture
+```
+┌─────────────────┐                    ┌─────────────────┐
+│  Desktop EMR    │                    │   Mobile App    │
+│  (Primary)      │                    │  (Companion)    │
+├─────────────────┤                    ├─────────────────┤
+│ SQLite + Chroma │                    │ SQLite (subset) │
+│ Full LLM        │                    │ Optional LLM    │
+│ Full features   │                    │ Core features   │
+└────────┬────────┘                    └────────▲────────┘
+         │                                      │
+         ▼                                      │
+┌─────────────────────────────────────────────────────────┐
+│              DocAssist Cloud (E2E Encrypted)            │
+│  - Encrypted backup blobs (server cannot decrypt)       │
+│  - Sync metadata (timestamps, patient count only)       │
+│  - Conflict resolution via timestamp + device ID        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Premium UX Principles
+1. **60fps animations**: Smooth transitions, no jank
+2. **Typography**: Noto Sans for Hindi support, clear hierarchy
+3. **Touch targets**: 48px minimum for all interactive elements
+4. **Haptic feedback**: Subtle vibration on save, delete, important actions
+5. **Dark mode**: AMOLED-optimized (#000000 background)
+6. **Loading states**: Skeleton screens, never blank
+7. **Offline-first**: App works immediately, syncs in background
+8. **India-optimized**: Works on ₹10K phones, low RAM tolerance
+
+### Mobile Project Structure
+```
+docassist_mobile/
+├── main.py                 # Mobile entry point
+├── src/
+│   ├── ui/
+│   │   ├── mobile_app.py       # Main mobile app (Flet)
+│   │   ├── patient_list.py     # Scrollable patient list
+│   │   ├── patient_detail.py   # Patient view screen
+│   │   ├── quick_actions.py    # Floating action buttons
+│   │   └── sync_indicator.py   # Sync status widget
+│   ├── services/
+│   │   ├── sync_client.py      # Download/decrypt backups
+│   │   ├── local_db.py         # Mobile SQLite operations
+│   │   └── mobile_llm.py       # Optional on-device LLM
+│   └── models/
+│       └── schemas.py          # Shared with desktop
+└── assets/
+    └── icons/                  # App icons, splash screen
+```
+
+### App Store Strategy
+- **iOS**: App Store via Flet's iOS build
+- **Android**: Google Play Store via Flet's Android build
+- **Pricing**:
+  - Mobile Lite: Free (included with any subscription)
+  - Mobile Pro (on-device AI): ₹299/mo add-on
+  - Mobile Cloud (cloud AI): Included in Professional tier (₹499/mo)
+- **Rating goal**: 4.5+ stars, respond to all reviews within 24 hours
+
+### Development Phases
+1. **Phase 1**: Mobile Lite MVP (view-only, sync from desktop)
+2. **Phase 2**: Edit capabilities (add visits, investigations)
+3. **Phase 3**: On-device LLM (Tier 2)
+4. **Phase 4**: Cloud LLM option (Tier 3)
+5. **Phase 5**: Multi-device real-time sync

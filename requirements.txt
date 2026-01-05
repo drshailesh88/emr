@@ -1,20 +1,136 @@
-flet==0.25.2
-requests>=2.31.0
-pydantic>=2.0.0
-chromadb>=0.4.22
-sentence-transformers>=2.2.2
-fpdf2>=2.7.0
-psutil>=5.9.0
-python-dotenv>=1.0.0
+# ============================================================================
+# DocAssist EMR - Production Requirements
+# ============================================================================
+# Python 3.11+ required
+# Install: pip install -r requirements.txt
+# ============================================================================
 
-# Encryption (for cloud backup)
-pynacl>=1.5.0
+# ----------------------------------------------------------------------------
+# Core Framework & UI
+# ----------------------------------------------------------------------------
+flet==0.25.2                    # Cross-platform UI framework (Python to native)
+python-dotenv==1.2.1            # Environment variable management (.env files)
 
-# Voice input (optional - install for dictation)
-# pip install faster-whisper sounddevice numpy
-# faster-whisper>=0.10.0
-# sounddevice>=0.4.6
-# numpy>=1.24.0
+# ----------------------------------------------------------------------------
+# Data Validation & Models
+# ----------------------------------------------------------------------------
+pydantic==2.12.5                # Data validation and settings management
+pydantic-core==2.41.5           # Core validation logic for Pydantic v2
 
-# Optional: S3-compatible storage (Backblaze B2, MinIO, AWS S3)
-# boto3>=1.34.0
+# ----------------------------------------------------------------------------
+# Database & Vector Store
+# ----------------------------------------------------------------------------
+# Note: sqlite3 is part of Python stdlib (no separate install needed)
+chromadb==1.4.0                 # Local vector database for RAG/embeddings
+onnxruntime==1.23.2             # Required by chromadb for model inference
+
+# ----------------------------------------------------------------------------
+# AI/ML - Embeddings & NLP
+# ----------------------------------------------------------------------------
+sentence-transformers==5.2.0    # Semantic text embeddings (all-MiniLM-L6-v2)
+tokenizers==0.22.1              # Fast tokenizers for transformers
+numpy==2.4.0                    # Numerical computing (required by ML libs)
+tqdm==4.67.1                    # Progress bars for model downloads
+
+# ----------------------------------------------------------------------------
+# HTTP Clients
+# ----------------------------------------------------------------------------
+requests==2.32.5                # HTTP library for Ollama API calls
+httpx==0.28.1                   # Async HTTP client (used by WhatsApp integration)
+httpcore==1.0.9                 # Low-level HTTP core (httpx dependency)
+
+# ----------------------------------------------------------------------------
+# PDF Generation
+# ----------------------------------------------------------------------------
+fpdf2==2.8.5                    # PDF generation for prescriptions
+pillow==12.1.0                  # Image processing (required by fpdf2)
+
+# ----------------------------------------------------------------------------
+# Cryptography & Security
+# ----------------------------------------------------------------------------
+# End-to-end encryption for cloud backups
+pynacl==1.6.2                   # NaCl/libsodium bindings (XSalsa20-Poly1305)
+cryptography==41.0.7            # Cryptographic primitives (fallback for PyNaCl)
+
+# Password hashing for user authentication
+argon2-cffi==25.1.0             # Argon2id password hashing (preferred)
+bcrypt==5.0.0                   # bcrypt password hashing (fallback)
+
+# ----------------------------------------------------------------------------
+# System Utilities
+# ----------------------------------------------------------------------------
+psutil==7.2.1                   # System/process utilities (RAM detection, monitoring)
+
+# ----------------------------------------------------------------------------
+# Voice Input (Optional - Recommended for Dictation)
+# ----------------------------------------------------------------------------
+# Uncomment to enable voice-to-text features:
+# faster-whisper==1.2.1         # Efficient Whisper implementation for speech recognition
+# sounddevice==0.5.3            # Cross-platform audio I/O library
+# PyAudio==0.2.14               # Alternative audio library (if sounddevice fails)
+
+# ----------------------------------------------------------------------------
+# Testing & Development
+# ----------------------------------------------------------------------------
+pytest==9.0.2                   # Testing framework
+pytest-asyncio==0.24.0          # Async test support
+
+# ----------------------------------------------------------------------------
+# Dependencies Auto-Installed by Above Packages
+# ----------------------------------------------------------------------------
+# The following are installed automatically by chromadb and other packages:
+# - grpcio (gRPC framework)
+# - opentelemetry-* (observability)
+# - pydantic (already listed above)
+# - bcrypt (already listed above)
+# - httpx (already listed above)
+# - jsonschema (JSON schema validation)
+# - tenacity (retry logic)
+# - posthog (analytics, disabled in EMR for privacy)
+# - typer (CLI framework)
+# - rich (terminal formatting)
+# - PyYAML (YAML parsing)
+
+# ============================================================================
+# Optional Cloud/Mobile Components (Separate Installs)
+# ============================================================================
+# These are NOT needed for the desktop EMR app:
+# - fastapi (for cloud-api/ service)
+# - uvicorn (for cloud-api/ service)
+# - aiosqlite (for async database in cloud-api/)
+# See cloud-api/requirements.txt and docassist_mobile/ for those dependencies.
+
+# ============================================================================
+# Installation Notes
+# ============================================================================
+# 1. Core install (without voice):
+#    pip install -r requirements.txt
+#
+# 2. Full install (with voice):
+#    Uncomment faster-whisper and sounddevice lines above, then:
+#    pip install -r requirements.txt
+#
+# 3. Development install (with tests):
+#    Already includes pytest - just run:
+#    pytest tests/
+#
+# 4. Windows-specific notes:
+#    - PyNaCl may require Visual C++ Build Tools
+#    - PyAudio may need manual installation from wheel
+#
+# 5. Linux-specific notes:
+#    - sounddevice requires: sudo apt-get install portaudio19-dev
+#    - Some systems need: sudo apt-get install python3-dev
+#
+# 6. macOS-specific notes:
+#    - sounddevice: brew install portaudio
+#    - Should work out of the box otherwise
+#
+# ============================================================================
+# Version Compatibility Matrix
+# ============================================================================
+# Python: 3.11, 3.12, 3.13
+# OS: Windows 10+, Ubuntu 20.04+, macOS 11+
+# RAM: 4GB minimum (8GB+ recommended for full AI features)
+# Disk: 2GB for base install, +3GB if using Whisper models
+# ============================================================================

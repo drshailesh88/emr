@@ -1,0 +1,23 @@
+# DocAssist Mobile - Dependencies
+# Same core as desktop where possible
+
+# UI Framework (Flet for mobile)
+flet>=0.25.0
+
+# Encryption (same as desktop)
+pynacl>=1.5.0
+
+# Data validation (same as desktop)
+pydantic>=2.0.0
+
+# HTTP client
+requests>=2.31.0
+
+# Date handling
+python-dateutil>=2.8.2
+
+# Secure credential storage
+keyring>=24.0.0
+
+# For iOS keychain / Android keystore
+# (handled by keyring backends)

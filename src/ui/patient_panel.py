@@ -8,6 +8,7 @@ from ..services.database import DatabaseService
 from ..services.rag import RAGService
 from .dialogs import ConfirmationDialog
 from .appointment_panel import TodayAppointmentsPanel
+from ..i18n import t
 
 
 class PatientPanel:
@@ -52,9 +53,9 @@ class PatientPanel:
 
         # Search field
         self.search_field = ft.TextField(
-            hint_text="Search patients...",
+            hint_text=t("patient.search"),
             prefix_icon=ft.Icons.SEARCH,
-            tooltip="Search patients (Ctrl+F)",
+            tooltip=t("patient.search_tooltip"),
             border_radius=20,
             height=45,
             text_size=14,
@@ -67,13 +68,13 @@ class PatientPanel:
             [
                 ft.IconButton(
                     icon=ft.Icons.EDIT,
-                    tooltip="Edit patient",
+                    tooltip=t("patient.edit_tooltip"),
                     icon_color=ft.Colors.BLUE_700,
                     on_click=self._edit_selected_patient,
                 ),
                 ft.IconButton(
                     icon=ft.Icons.DELETE_OUTLINE,
-                    tooltip="Delete patient",
+                    tooltip=t("patient.delete_tooltip"),
                     icon_color=ft.Colors.RED_700,
                     on_click=self._delete_selected_patient,
                 ),
@@ -91,9 +92,9 @@ class PatientPanel:
 
         # New patient button
         new_patient_btn = ft.ElevatedButton(
-            text="New Patient",
+            text=t("patient.new"),
             icon=ft.Icons.PERSON_ADD,
-            tooltip="Add new patient (Ctrl+N)",
+            tooltip=t("patient.add_tooltip"),
             style=ft.ButtonStyle(
                 bgcolor=ft.Colors.BLUE_700,
                 color=ft.Colors.WHITE,
@@ -112,7 +113,7 @@ class PatientPanel:
                 ft.Divider(height=1),
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("Patients", size=16, weight=ft.FontWeight.BOLD),
+                        ft.Text(t("patient.title"), size=16, weight=ft.FontWeight.BOLD),
                         self.search_field,
                         self.patient_actions,
                     ], spacing=10),
@@ -199,7 +200,7 @@ class PatientPanel:
                 ft.Container(
                     content=ft.Row([
                         ft.Icon(ft.Icons.STAR, size=16, color=ft.Colors.AMBER_700),
-                        ft.Text("FAVORITES", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
+                        ft.Text(t("patient.sections.favorites"), size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
                     ], spacing=5),
                     padding=ft.padding.only(left=10, right=10, top=10, bottom=5),
                 )
@@ -216,7 +217,7 @@ class PatientPanel:
                 ft.Container(
                     content=ft.Row([
                         ft.Icon(ft.Icons.TODAY, size=16, color=ft.Colors.GREEN_700),
-                        ft.Text(f"TODAY ({len(todays)})", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
+                        ft.Text(f"{t('patient.sections.today')} ({len(todays)})", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
                     ], spacing=5),
                     padding=ft.padding.only(left=10, right=10, top=10, bottom=5),
                 )
@@ -233,7 +234,7 @@ class PatientPanel:
                 ft.Container(
                     content=ft.Row([
                         ft.Icon(ft.Icons.HISTORY, size=16, color=ft.Colors.BLUE_700),
-                        ft.Text("RECENT", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
+                        ft.Text(t("patient.sections.recent"), size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
                     ], spacing=5),
                     padding=ft.padding.only(left=10, right=10, top=10, bottom=5),
                 )
@@ -245,7 +246,7 @@ class PatientPanel:
             self.patient_list.controls.append(
                 ft.Container(
                     content=ft.TextButton(
-                        "Clear recent",
+                        t("patient.clear_recent"),
                         icon=ft.Icons.CLEAR_ALL,
                         on_click=self._clear_recent,
                         style=ft.ButtonStyle(color=ft.Colors.GREY_600),
@@ -262,7 +263,7 @@ class PatientPanel:
             ft.Container(
                 content=ft.Row([
                     ft.Icon(ft.Icons.PEOPLE, size=16, color=ft.Colors.GREY_600),
-                    ft.Text("ALL PATIENTS", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
+                    ft.Text(t("patient.sections.all"), size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
                 ], spacing=5),
                 padding=ft.padding.only(left=10, right=10, top=10, bottom=5),
             )
@@ -293,7 +294,7 @@ class PatientPanel:
             icon=ft.Icons.STAR if is_favorite else ft.Icons.STAR_BORDER,
             icon_color=ft.Colors.AMBER_700 if is_favorite else (ft.Colors.WHITE70 if is_selected else ft.Colors.GREY_400),
             icon_size=18,
-            tooltip="Toggle favorite",
+            tooltip=t("patient.toggle_favorite"),
             on_click=lambda e, p=patient: self._toggle_favorite(e, p),
         )
 
@@ -427,33 +428,33 @@ class PatientPanel:
         is_new = patient is None
 
         name_field = ft.TextField(
-            label="Name *",
+            label=t("label.name_required"),
             value=patient.name if patient else "",
             autofocus=True
         )
         age_field = ft.TextField(
-            label="Age",
+            label=t("patient.age"),
             value=str(patient.age) if patient and patient.age else "",
             keyboard_type=ft.KeyboardType.NUMBER,
             width=100
         )
         gender_dropdown = ft.Dropdown(
-            label="Gender",
+            label=t("patient.gender"),
             value=patient.gender if patient else None,
             options=[
-                ft.dropdown.Option("M", "Male"),
-                ft.dropdown.Option("F", "Female"),
-                ft.dropdown.Option("O", "Other"),
+                ft.dropdown.Option("M", t("patient.male")),
+                ft.dropdown.Option("F", t("patient.female")),
+                ft.dropdown.Option("O", t("patient.other")),
             ],
             width=120,
         )
         phone_field = ft.TextField(
-            label="Phone",
+            label=t("patient.phone"),
             value=patient.phone if patient and patient.phone else "",
             keyboard_type=ft.KeyboardType.PHONE
         )
         address_field = ft.TextField(
-            label="Address",
+            label=t("patient.address"),
             value=patient.address if patient and patient.address else "",
             multiline=True,
             min_lines=2
@@ -463,7 +464,7 @@ class PatientPanel:
 
         def save_patient(e):
             if not name_field.value.strip():
-                error_text.value = "Name is required"
+                error_text.value = t("patient.name_required")
                 page.update()
                 return
 
@@ -495,10 +496,10 @@ class PatientPanel:
                 if self.db.update_patient(updated_patient):
                     dialog.open = False
                     page.update()
-                    self._show_snackbar(page, "Patient updated successfully")
+                    self._show_snackbar(page, t("patient.updated"))
                     self.on_patient_updated()
                 else:
-                    error_text.value = "Failed to update patient"
+                    error_text.value = t("patient.update_failed")
                     page.update()
 
         def close_dialog(e):
@@ -506,7 +507,7 @@ class PatientPanel:
             page.update()
 
         dialog = ft.AlertDialog(
-            title=ft.Text("Add New Patient" if is_new else "Edit Patient"),
+            title=ft.Text(t("dialog.add_patient") if is_new else t("dialog.edit_patient")),
             content=ft.Container(
                 content=ft.Column([
                     name_field,
@@ -518,8 +519,8 @@ class PatientPanel:
                 width=400,
             ),
             actions=[
-                ft.TextButton("Cancel", on_click=close_dialog),
-                ft.ElevatedButton("Save", on_click=save_patient),
+                ft.TextButton(t("common.cancel"), on_click=close_dialog),
+                ft.ElevatedButton(t("common.save"), on_click=save_patient),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -537,26 +538,22 @@ class PatientPanel:
 
         def confirm_delete():
             if self.db.delete_patient(patient.id):
-                self._show_snackbar(e.page, "Patient deleted successfully")
+                self._show_snackbar(e.page, t("patient.deleted"))
                 self.selected_patient_id = None
                 self.selected_patient = None
                 self.patient_actions.visible = False
                 self.on_patient_updated()
             else:
-                self._show_snackbar(e.page, "Failed to delete patient", error=True)
+                self._show_snackbar(e.page, t("patient.delete_failed"), error=True)
 
-        message = (
-            f"This will delete patient {patient.name} (UHID: {patient.uhid}).\n\n"
-            f"All associated visits, investigations, and procedures will also be marked as deleted.\n\n"
-            f"This is a soft delete and records can be recovered from backups."
-        )
+        message = t("patient.delete_confirm_message", name=patient.name, uhid=patient.uhid)
 
         ConfirmationDialog.show(
             e.page,
-            "Delete Patient?",
+            t("patient.delete_confirm_title"),
             message,
             confirm_delete,
-            confirm_text="Delete Patient"
+            confirm_text=t("patient.delete")
         )
 
     def _show_snackbar(self, page, message: str, error: bool = False):
@@ -568,3 +565,43 @@ class PatientPanel:
                     bgcolor=ft.Colors.RED_700 if error else ft.Colors.GREEN_700,
                 )
             )
+
+    def navigate_patient(self, direction: str):
+        """Navigate to next or previous patient in the list.
+
+        Args:
+            direction: "next" or "previous"
+        """
+        if not self.patients or not self.selected_patient:
+            return
+
+        # Find current patient index
+        current_index = -1
+        for i, patient in enumerate(self.patients):
+            if patient.id == self.selected_patient_id:
+                current_index = i
+                break
+
+        if current_index == -1:
+            return
+
+        # Calculate new index
+        if direction == "next":
+            new_index = (current_index + 1) % len(self.patients)
+        elif direction == "previous":
+            new_index = (current_index - 1) % len(self.patients)
+        else:
+            return
+
+        # Select new patient
+        new_patient = self.patients[new_index]
+        self.selected_patient_id = new_patient.id
+        self.selected_patient = new_patient
+        self.on_patient_selected(new_patient)
+
+        # Update UI
+        self._refresh_list()
+
+    def _on_add_patient_click(self, e):
+        """Handle add patient button click (called from keyboard shortcut)."""
+        self._show_new_patient_dialog(e)

@@ -44,12 +44,13 @@ class BackupSettings:
 class DoctorSettings:
     """Doctor/clinic information."""
     doctor_name: str = ""
+    qualifications: str = ""  # e.g., "MBBS, MD (Medicine)"
+    registration_number: str = ""
+    specialization: str = ""
     clinic_name: str = ""
     clinic_address: str = ""
     phone: str = ""
     email: str = ""
-    registration_number: str = ""
-    specialization: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -69,6 +70,7 @@ class AppSettings:
     doctor: DoctorSettings = field(default_factory=DoctorSettings)
     theme: str = "light"  # "light" or "dark"
     language: str = "en"  # Currently only "en" supported
+    tutorial_completed: bool = False  # First-run tutorial completion status
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -78,6 +80,7 @@ class AppSettings:
             'doctor': self.doctor.to_dict(),
             'theme': self.theme,
             'language': self.language,
+            'tutorial_completed': self.tutorial_completed,
         }
 
     @classmethod
@@ -93,6 +96,7 @@ class AppSettings:
             doctor=DoctorSettings.from_dict(doctor_data),
             theme=data.get('theme', 'light'),
             language=data.get('language', 'en'),
+            tutorial_completed=data.get('tutorial_completed', False),
         )
 
 
@@ -265,3 +269,83 @@ class SettingsService:
         logger.warning("Resetting settings to defaults")
         self._settings = AppSettings()
         self.save()
+
+    def is_first_run(self) -> bool:
+        """Check if this is the first run (no doctor profile configured).
+
+        Returns:
+            True if no doctor profile is set up, False otherwise
+        """
+        doctor_settings = self.get_doctor_settings()
+        # First run if doctor name is empty or not set
+        return not doctor_settings.doctor_name.strip()
+
+    def save_doctor_profile(
+        self,
+        doctor_name: str,
+        qualifications: str = "",
+        registration_number: str = "",
+        specialization: str = ""
+    ):
+        """Save doctor profile information.
+
+        Args:
+            doctor_name: Doctor's full name
+            qualifications: Medical qualifications (e.g., "MBBS, MD")
+            registration_number: Medical registration number
+            specialization: Medical specialization
+        """
+        doctor_settings = self.get_doctor_settings()
+        doctor_settings.doctor_name = doctor_name
+        doctor_settings.qualifications = qualifications
+        doctor_settings.registration_number = registration_number
+        doctor_settings.specialization = specialization
+
+        self.update_doctor_settings(doctor_settings)
+        logger.info(f"Doctor profile saved: {doctor_name}")
+
+    def save_clinic_info(
+        self,
+        clinic_name: str,
+        clinic_address: str,
+        phone: str,
+        email: str = ""
+    ):
+        """Save clinic information.
+
+        Args:
+            clinic_name: Clinic/hospital name
+            clinic_address: Full clinic address
+            phone: Contact phone number
+            email: Contact email (optional)
+        """
+        doctor_settings = self.get_doctor_settings()
+        doctor_settings.clinic_name = clinic_name
+        doctor_settings.clinic_address = clinic_address
+        doctor_settings.phone = phone
+        doctor_settings.email = email
+
+        self.update_doctor_settings(doctor_settings)
+        logger.info(f"Clinic info saved: {clinic_name}")
+
+    def is_tutorial_completed(self) -> bool:
+        """Check if the tutorial has been completed.
+
+        Returns:
+            True if tutorial has been completed, False otherwise
+        """
+        return self.load().tutorial_completed
+
+    def mark_tutorial_completed(self):
+        """Mark the tutorial as completed."""
+        settings = self.load()
+        settings.tutorial_completed = True
+        self.save(settings)
+        logger.info("Tutorial marked as completed")
+
+    def reset_tutorial(self):
+        """Reset tutorial completion status (for re-triggering)."""
+        settings = self.load()
+        settings.tutorial_completed = False
+        self.save(settings)
+        logger.info("Tutorial status reset")

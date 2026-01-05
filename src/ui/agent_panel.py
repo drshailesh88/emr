@@ -9,6 +9,7 @@ import logging
 from ..models.schemas import Patient
 from ..services.llm import LLMService
 from ..services.rag import RAGService
+from .components.language_indicator import LanguageIndicator
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class AgentPanel:
         self.loading_indicator: Optional[ft.ProgressRing] = None
         self.patient_context: Optional[ft.Text] = None
         self.doc_count: Optional[ft.Text] = None
+        self.query_language_indicator: Optional[LanguageIndicator] = None
 
     def build(self) -> ft.Control:
         """Build the agent panel UI."""
@@ -118,7 +120,11 @@ class AgentPanel:
             max_lines=3,
             expand=True,
             on_submit=self._on_send_click,
+            on_change=self._on_query_change,
         )
+
+        # Language indicator for query
+        self.query_language_indicator = LanguageIndicator(visible=True)
 
         self.send_btn = ft.IconButton(
             icon=ft.Icons.SEND,
@@ -127,9 +133,19 @@ class AgentPanel:
             on_click=self._on_send_click,
         )
 
+        # Query input with language indicator
+        query_with_indicator = ft.Stack([
+            self.query_field,
+            ft.Container(
+                content=self.query_language_indicator,
+                right=50,  # Position before send button
+                top=8,
+            ),
+        ])
+
         input_row = ft.Container(
             content=ft.Row([
-                self.query_field,
+                query_with_indicator,
                 self.loading_indicator,
                 self.send_btn,
             ], spacing=5),
@@ -241,10 +257,21 @@ class AgentPanel:
         if self.chat_list.page:
             self.chat_list.update()
 
+    def _on_query_change(self, e):
+        """Handle query field change - update language indicator."""
+        query_text = e.control.value if hasattr(e.control, 'value') else ""
+
+        # Update language indicator
+        if self.query_language_indicator:
+            self.query_language_indicator.update_text(query_text)
+
     def _quick_query(self, query: str):
         """Handle quick action button click."""
         logger.debug(f"Quick query selected: {query}")
         self.query_field.value = query
+        # Update language indicator
+        if self.query_language_indicator:
+            self.query_language_indicator.update_text(query)
         if self.query_field.page:
             self.query_field.page.update()
         self._send_query(query)

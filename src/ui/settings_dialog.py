@@ -7,6 +7,7 @@ from pathlib import Path
 from ..services.settings import AppSettings, DoctorSettings, ClinicSettings, PreferenceSettings
 from ..services.backup import BackupService
 from ..services.export import ExportService
+from ..i18n import t, set_language, get_language, get_available_languages
 
 
 class SettingsDialog:
@@ -169,9 +170,30 @@ class SettingsDialog:
             on_change=self._on_preferences_change
         )
 
+        # Language selector
+        available_languages = get_available_languages()
+        current_language = get_language()
+        self.language_dropdown = ft.Dropdown(
+            label="Language / भाषा",
+            value=current_language,
+            options=[
+                ft.dropdown.Option(lang["code"], lang["name"])
+                for lang in available_languages
+            ],
+            on_change=self._on_language_change
+        )
+
         preferences_tab = ft.Container(
             content=ft.Column([
                 ft.Text("Preferences", size=16, weight=ft.FontWeight.BOLD),
+                ft.Divider(),
+                self.language_dropdown,
+                ft.Text(
+                    "Language change will refresh the UI immediately.",
+                    size=11,
+                    color=ft.Colors.GREY_600,
+                    italic=True
+                ),
                 ft.Divider(),
                 self.backup_frequency,
                 self.backup_retention,
@@ -572,6 +594,22 @@ class SettingsDialog:
         self.working_settings.preferences.model_override = model_val if model_val else None
 
         self.working_settings.preferences.theme = self.theme.value
+
+    def _on_language_change(self, e):
+        """Handle language change."""
+        new_language = self.language_dropdown.value
+        if set_language(new_language):
+            # Show snackbar to inform user
+            self.page.show_snack_bar(
+                ft.SnackBar(
+                    content=ft.Text(
+                        "Language changed. Please restart the app for full effect."
+                        if new_language == "en"
+                        else "भाषा बदल गई। पूर्ण प्रभाव के लिए कृपया ऐप को पुनः आरंभ करें।"
+                    ),
+                    bgcolor=ft.Colors.BLUE_700,
+                )
+            )
 
     def _on_save_click(self, e):
         """Handle save button click."""

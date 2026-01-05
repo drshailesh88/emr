@@ -1,398 +1,305 @@
 # DocAssist Cloud API
 
-Zero-knowledge encrypted backup storage for DocAssist EMR using Cloudflare Workers + R2.
-
-## Architecture
-
-The server stores only encrypted blobs and **cannot decrypt** patient data. All encryption/decryption happens client-side using PyNaCl.
-
-```
-Client Device         Cloud API          R2 Storage
-┌─────────────┐      ┌─────────┐       ┌──────────┐
-│ Plaintext   │──────│ Workers │───────│ Encrypted│
-│ SQLite +    │ AES  │ (proxy) │       │ Blobs    │
-│ ChromaDB    │──────│         │───────│          │
-└─────────────┘      └─────────┘       └──────────┘
-     │                                       │
-     └───────────────────────────────────────┘
-              Encryption key NEVER
-              leaves the device
-```
+E2E Encrypted Backup Service for DocAssist EMR - A zero-knowledge cloud backend that enables secure backup and sync between desktop and mobile apps.
 
 ## Features
 
-- ✅ Zero-knowledge storage (server cannot decrypt)
-- ✅ API key authentication
-- ✅ Rate limiting (100 req/min)
-- ✅ Storage quota enforcement
-- ✅ Device isolation
-- ✅ Metadata tracking (size, checksum, timestamps)
-- ✅ CORS support for web clients
+- **Zero-Knowledge Architecture**: Server cannot decrypt patient data
+- **E2E Encryption**: All encryption happens client-side
+- **JWT Authentication**: Secure token-based authentication
+- **Rate Limiting**: Protection against abuse
+- **RESTful API**: Clean, documented endpoints
+- **Async/Await**: High-performance async operations
+- **SQLite Database**: Lightweight metadata storage
 
-## Setup
+## Quick Start
 
-### 1. Install Dependencies
-
-```bash
-npm install
-```
-
-### 2. Create KV Namespaces
+### 1. Installation
 
 ```bash
-# API Keys storage
-wrangler kv:namespace create "API_KEYS"
-wrangler kv:namespace create "API_KEYS" --preview
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Usage tracking
-wrangler kv:namespace create "USAGE"
-wrangler kv:namespace create "USAGE" --preview
-
-# Rate limiting
-wrangler kv:namespace create "RATE_LIMIT"
-wrangler kv:namespace create "RATE_LIMIT" --preview
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-Copy the namespace IDs into `wrangler.toml`.
-
-### 3. Create R2 Buckets
+### 2. Configuration
 
 ```bash
-# Production bucket
-wrangler r2 bucket create docassist-backups
+# Copy environment template
+cp .env.example .env
 
-# Preview bucket (for local dev)
-wrangler r2 bucket create docassist-backups-preview
+# Generate JWT secret key
+openssl rand -hex 32
+
+# Edit .env and add your JWT secret key
+nano .env
 ```
 
-### 4. Update Configuration
-
-Edit `wrangler.toml` and replace placeholder IDs:
-- `YOUR_API_KEYS_KV_ID`
-- `YOUR_USAGE_KV_ID`
-- `YOUR_RATE_LIMIT_KV_ID`
-
-### 5. Generate API Keys
+### 3. Run Server
 
 ```bash
-# Generate a new API key for a device
-wrangler kv:key put --binding=API_KEYS \
-  "sk_live_abc123xyz" \
-  '{"api_key":"sk_live_abc123xyz","device_id":"device-001","tier":"free","created_at":"2024-01-01T00:00:00Z"}'
+# Development mode (with auto-reload)
+python main.py
+
+# Production mode
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-**Key format:**
-```json
-{
-  "api_key": "sk_live_abc123xyz",
-  "device_id": "device-001",
-  "tier": "free",
-  "created_at": "2024-01-01T00:00:00Z"
-}
-```
+### 4. Access API Documentation
 
-## Development
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- Health Check: http://localhost:8000/health
 
-### Run Locally
-
-```bash
-npm run dev
-```
-
-This starts the worker at `http://localhost:8787`.
-
-### Test Endpoints
-
-```bash
-# Health check
-curl http://localhost:8787/health
-
-# Upload backup
-curl -X PUT http://localhost:8787/v1/backups/device-001/backup-2024-01-01.enc \
-  -H "Authorization: Bearer sk_live_abc123xyz" \
-  -H "Content-Type: application/octet-stream" \
-  -H "X-Backup-Checksum: sha256:abc123..." \
-  --data-binary @backup.enc
-
-# List backups
-curl http://localhost:8787/v1/backups/device-001 \
-  -H "Authorization: Bearer sk_live_abc123xyz"
-
-# Download backup
-curl http://localhost:8787/v1/backups/device-001/backup-2024-01-01.enc \
-  -H "Authorization: Bearer sk_live_abc123xyz" \
-  -o backup.enc
-
-# Get account info
-curl http://localhost:8787/v1/account \
-  -H "Authorization: Bearer sk_live_abc123xyz"
-
-# Check if backup exists (HEAD)
-curl -I http://localhost:8787/v1/backups/device-001/backup-2024-01-01.enc \
-  -H "Authorization: Bearer sk_live_abc123xyz"
-
-# Get backup metadata
-curl http://localhost:8787/v1/backups/device-001/backup-2024-01-01.enc/metadata \
-  -H "Authorization: Bearer sk_live_abc123xyz"
-
-# Delete backup
-curl -X DELETE http://localhost:8787/v1/backups/device-001/backup-2024-01-01.enc \
-  -H "Authorization: Bearer sk_live_abc123xyz"
-```
-
-## Deployment
-
-### Deploy to Production
-
-```bash
-npm run deploy
-```
-
-Your API will be available at:
-```
-https://docassist-cloud.<your-subdomain>.workers.dev
-```
-
-### Custom Domain (Optional)
-
-1. Go to Cloudflare Dashboard > Workers & Pages
-2. Select your worker
-3. Add custom domain (e.g., `api.docassist.health`)
-
-## API Reference
+## API Endpoints
 
 ### Authentication
 
-All endpoints require Bearer token authentication:
+#### Register New User
+```http
+POST /auth/register
+Content-Type: application/json
 
+{
+  "email": "doctor@example.com",
+  "password": "securepassword",
+  "name": "Dr. John Doe",
+  "phone": "+919876543210",
+  "license_number": "MH-12345"
+}
 ```
-Authorization: Bearer sk_live_abc123xyz
-```
 
-### Endpoints
-
-#### `PUT /v1/backups/:device_id/:key`
-
-Upload encrypted backup.
-
-**Headers:**
-- `Content-Type`: `application/octet-stream`
-- `Content-Length`: Required
-- `X-Backup-Checksum`: Optional SHA256 checksum
-
-**Response:**
+Response:
 ```json
 {
-  "success": true,
-  "message": "Backup uploaded successfully",
-  "metadata": {
-    "device_id": "device-001",
-    "key": "backup-2024-01-01.enc",
-    "size": 1024000,
-    "uploaded_at": "2024-01-01T12:00:00Z",
-    "checksum": "sha256:abc123...",
-    "content_type": "application/octet-stream"
+  "access_token": "eyJhbGc...",
+  "token_type": "bearer",
+  "expires_in": 604800,
+  "user": {
+    "id": 1,
+    "email": "doctor@example.com",
+    "name": "Dr. John Doe",
+    ...
   }
 }
 ```
 
-#### `GET /v1/backups/:device_id/:key`
+#### Login
+```http
+POST /auth/login
+Content-Type: application/json
 
-Download encrypted backup.
-
-**Response:** Binary blob with headers:
-- `Content-Type`: `application/octet-stream`
-- `Content-Length`: Size in bytes
-- `X-Backup-Checksum`: SHA256 checksum
-- `X-Uploaded-At`: ISO timestamp
-
-#### `DELETE /v1/backups/:device_id/:key`
-
-Delete backup.
-
-**Response:**
-```json
 {
-  "success": true,
-  "message": "Backup deleted successfully"
+  "email": "doctor@example.com",
+  "password": "securepassword"
 }
 ```
 
-#### `GET /v1/backups/:device_id`
+### Backup Management
 
-List all backups for device.
+#### Upload Backup
+```http
+POST /backup/upload
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
 
-**Response:**
+file: (binary encrypted backup)
+device_id: "desktop-123"
+device_name: "Desktop PC"
+```
+
+#### Get Latest Backup Metadata
+```http
+GET /backup/latest
+Authorization: Bearer {token}
+```
+
+Response:
 ```json
 {
-  "device_id": "device-001",
-  "backups": [
-    {
-      "key": "backup-2024-01-01.enc",
-      "size": 1024000,
-      "uploaded_at": "2024-01-01T12:00:00Z",
-      "checksum": "sha256:abc123..."
-    }
-  ],
-  "total_count": 1,
-  "total_size": 1024000
+  "backup_id": "uuid-here",
+  "filename": "backup.enc",
+  "size_bytes": 1024000,
+  "checksum": "sha256-hash",
+  "device_name": "Desktop PC",
+  "created_at": "2024-01-15T10:30:00Z"
 }
 ```
 
-#### `HEAD /v1/backups/:device_id/:key`
+#### Download Backup
+```http
+GET /backup/download/{backup_id}
+Authorization: Bearer {token}
+```
 
-Check if backup exists.
+#### Get Sync Status
+```http
+GET /backup/sync/status
+Authorization: Bearer {token}
+```
 
-**Response:** 200 if exists, 404 if not found
-
-**Headers:**
-- `X-Backup-Exists`: `true`
-- `Content-Length`: Size in bytes
-- `X-Uploaded-At`: ISO timestamp
-
-#### `GET /v1/backups/:device_id/:key/metadata`
-
-Get backup metadata without downloading.
-
-**Response:**
+Response:
 ```json
 {
-  "device_id": "device-001",
-  "key": "backup-2024-01-01.enc",
-  "size": 1024000,
-  "uploaded_at": "2024-01-01T12:00:00Z",
-  "checksum": "sha256:abc123...",
-  "content_type": "application/octet-stream"
+  "last_backup_time": "2024-01-15T10:30:00Z",
+  "backup_count": 5,
+  "total_size_bytes": 5120000,
+  "devices": ["Desktop PC", "Laptop"]
 }
 ```
 
-#### `GET /v1/account`
-
-Get account information.
-
-**Response:**
-```json
-{
-  "device_id": "device-001",
-  "tier": "free",
-  "quota_bytes": 1073741824,
-  "used_bytes": 1024000,
-  "backup_count": 1,
-  "percentage_used": 0.09
-}
-```
-
-## Storage Tiers
-
-| Tier   | Storage | Price/mo | Features                    |
-|--------|---------|----------|-----------------------------|
-| Free   | 1 GB    | ₹0       | Manual backup               |
-| Basic  | 10 GB   | ₹99      | Auto-backup, 30-day history |
-| Pro    | 50 GB   | ₹299     | + Multi-device sync         |
-| Clinic | 200 GB  | ₹999     | + 5 users, audit log        |
-
-## Rate Limiting
-
-- **Limit:** 100 requests per minute per API key
-- **Response:** 429 Too Many Requests
-
-## Error Codes
-
-| Status | Error                  | Description                      |
-|--------|------------------------|----------------------------------|
-| 400    | invalid_request        | Malformed request                |
-| 401    | unauthorized           | Invalid or missing API key       |
-| 403    | forbidden              | Device ID mismatch               |
-| 404    | not_found              | Backup or endpoint not found     |
-| 413    | payload_too_large      | File too large                   |
-| 413    | quota_exceeded         | Storage quota exceeded           |
-| 429    | rate_limit_exceeded    | Too many requests                |
-| 500    | upload_failed          | Upload error                     |
-| 500    | download_failed        | Download error                   |
-
-## Security
+## Security Features
 
 ### Zero-Knowledge Architecture
+- Server stores only encrypted blobs
+- No access to encryption keys
+- Cannot decrypt patient data
+- WhatsApp-style privacy model
 
-The server **cannot decrypt** backups because:
+### Authentication
+- Passwords hashed with bcrypt (cost factor: 12)
+- JWT tokens with 7-day expiration
+- Secure token validation on every request
 
-1. All encryption happens **client-side** using PyNaCl
-2. Encryption keys are derived from user passwords via Argon2
-3. Keys **never leave** the user's device
-4. Server stores only encrypted blobs
+### Rate Limiting
+- Downloads: 10 requests/minute
+- Uploads: 5 requests/minute
+- Configurable per endpoint
 
-### API Key Management
+### Data Isolation
+- Each user's backups stored separately
+- No cross-user access possible
+- Strict authorization checks
 
-- API keys start with `sk_live_` for production, `sk_test_` for testing
-- Store keys securely in KV namespace
-- Rotate keys periodically
-- Never commit keys to version control
-
-### HTTPS Only
-
-All production traffic must use HTTPS. Cloudflare Workers enforce this by default.
-
-## Monitoring
-
-### View Logs
+## Testing
 
 ```bash
-npm run tail
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=src tests/
+
+# Run specific test class
+pytest tests/test_api.py::TestAuthentication -v
 ```
 
-### Metrics
+## Deployment
 
-View in Cloudflare Dashboard:
-- Request count
-- Error rate
-- Response time
-- Bandwidth usage
+### Production Checklist
 
-## Cost Estimation
+1. **Environment Variables**
+   - [ ] Generate strong JWT secret key
+   - [ ] Set production database path
+   - [ ] Configure CORS allowed origins
+   - [ ] Set appropriate rate limits
 
-Cloudflare Workers pricing (as of 2024):
+2. **Security**
+   - [ ] Use HTTPS (TLS/SSL certificate)
+   - [ ] Configure firewall rules
+   - [ ] Enable request logging
+   - [ ] Set up monitoring
 
-- **Workers:** $5/month for 10M requests
-- **R2 Storage:** $0.015/GB/month
-- **R2 Operations:** Free egress, minimal operation costs
+3. **Database**
+   - [ ] Regular backups of metadata DB
+   - [ ] Set up backup rotation policy
+   - [ ] Monitor disk usage
 
-**Example:** 100 users × 1GB average = $1.50/month storage + $5 workers = **$6.50/month**
+4. **Performance**
+   - [ ] Use production ASGI server (uvicorn with workers)
+   - [ ] Set up reverse proxy (nginx)
+   - [ ] Configure caching headers
+   - [ ] Monitor response times
 
-## Troubleshooting
+### Docker Deployment
 
-### "Invalid API key" error
+```dockerfile
+FROM python:3.11-slim
 
-- Verify KV namespace IDs in `wrangler.toml`
-- Check API key format in KV store
-- Ensure Bearer token is correct
+WORKDIR /app
 
-### "Quota exceeded" error
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-- Check account tier: `GET /v1/account`
-- Delete old backups to free space
-- Upgrade tier if needed
+COPY . .
 
-### CORS errors
+ENV DATABASE_PATH=/data/cloud_api.db
+ENV BACKUP_STORAGE_PATH=/data/backups
 
-- Verify CORS headers are present
-- Check browser console for specific error
-- Test with `curl` to isolate client issues
+VOLUME ["/data"]
 
-## Contributing
+EXPOSE 8000
 
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/new-feature`
-3. Make changes and test locally: `npm run dev`
-4. Run type check: `npm run type-check`
-5. Commit: `git commit -m "feat: add new feature"`
-6. Push and create PR
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Build and run:
+```bash
+docker build -t docassist-cloud-api .
+docker run -d -p 8000:8000 -v /path/to/data:/data docassist-cloud-api
+```
+
+### Systemd Service
+
+```ini
+[Unit]
+Description=DocAssist Cloud API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/docassist-cloud-api
+Environment="PATH=/opt/docassist-cloud-api/venv/bin"
+ExecStart=/opt/docassist-cloud-api/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## Architecture
+
+### Directory Structure
+```
+cloud-api/
+├── main.py              # FastAPI application
+├── requirements.txt     # Python dependencies
+├── .env                 # Environment variables (not in git)
+├── src/
+│   ├── database.py      # SQLite database layer
+│   ├── auth/            # Authentication module
+│   │   ├── router.py    # Auth endpoints
+│   │   ├── models.py    # Pydantic models
+│   │   └── jwt.py       # JWT utilities
+│   └── backup/          # Backup module
+│       ├── router.py    # Backup endpoints
+│       ├── models.py    # Pydantic models
+│       └── storage.py   # File storage
+├── data/                # Runtime data (not in git)
+│   ├── cloud_api.db     # Metadata database
+│   └── backups/         # Encrypted backup files
+└── tests/
+    └── test_api.py      # API tests
+```
+
+### Database Schema
+
+**users**
+- id, email, password_hash, name, phone, license_number
+- created_at, last_login, is_active
+
+**backups**
+- id, backup_id, user_id, filename, size_bytes
+- checksum, device_id, device_name, created_at
 
 ## License
 
-MIT License - see LICENSE file for details
+Proprietary - DocAssist EMR
 
 ## Support
 
-- Documentation: https://github.com/docassist/cloud-api
-- Issues: https://github.com/docassist/cloud-api/issues
-- Email: support@docassist.health
+For issues or questions, contact: support@docassist.in

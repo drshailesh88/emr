@@ -7,3 +7,19 @@ __pycache__/
 
 # Local data
 /data/
+
+# Test results and coverage
+/test_results/
+/coverage_report/
+/htmlcov/
+/.coverage
+coverage.xml
+.pytest_cache/
+*.log
+
+# Tox
+.tox/
+
+# Test databases
+*.test.db
+test_*.db

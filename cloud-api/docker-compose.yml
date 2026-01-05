@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: docassist-cloud-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_PATH=/data/cloud_api.db
+      - BACKUP_STORAGE_PATH=/data/backups
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - RATE_LIMIT_DOWNLOAD=10/minute
+      - RATE_LIMIT_UPLOAD=5/minute
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  data:
