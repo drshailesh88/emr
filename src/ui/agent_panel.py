@@ -1,4 +1,4 @@
-"""Right panel - AI Agent for RAG queries."""
+"""Right panel - AI Agent for RAG queries with premium styling."""
 
 import flet as ft
 from typing import Callable, Optional, List
@@ -10,6 +10,7 @@ from ..models.schemas import Patient
 from ..services.llm import LLMService
 from ..services.rag import RAGService
 from .components.language_indicator import LanguageIndicator
+from .tokens import Colors, Typography, Spacing, Radius, Motion
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +28,19 @@ class ChatMessage:
 
 
 class AgentPanel:
-    """AI Assistant panel for RAG queries."""
+    """Premium AI Assistant panel for RAG queries."""
 
     def __init__(
         self,
         on_query: Callable[[str, Callable], None],
         llm: LLMService,
-        rag: RAGService
+        rag: RAGService,
+        is_dark: bool = False
     ):
         self.on_query = on_query
         self.llm = llm
         self.rag = rag
+        self.is_dark = is_dark
 
         self.current_patient: Optional[Patient] = None
         self.messages: List[ChatMessage] = []
@@ -50,52 +53,104 @@ class AgentPanel:
         self.patient_context: Optional[ft.Text] = None
         self.doc_count: Optional[ft.Text] = None
         self.query_language_indicator: Optional[LanguageIndicator] = None
+        self.typing_indicator: Optional[ft.Container] = None
 
     def build(self) -> ft.Control:
-        """Build the agent panel UI."""
+        """Build the premium agent panel UI."""
 
-        # Header with patient context
+        # Patient context text
         self.patient_context = ft.Text(
             "No patient selected",
-            size=12,
-            color=ft.Colors.GREY_600,
+            size=Typography.BODY_SMALL.size,
+            color=Colors.NEUTRAL_500 if not self.is_dark else Colors.NEUTRAL_400,
             italic=True,
         )
 
         self.doc_count = ft.Text(
             "",
-            size=11,
-            color=ft.Colors.GREY_500,
+            size=Typography.CAPTION.size,
+            color=Colors.NEUTRAL_400 if not self.is_dark else Colors.NEUTRAL_500,
         )
 
         # Clear chat button
         clear_btn = ft.IconButton(
-            icon=ft.Icons.DELETE_SWEEP,
+            icon=ft.Icons.DELETE_SWEEP_OUTLINED,
             icon_size=18,
             tooltip="Clear chat (Ctrl+L)",
+            icon_color=Colors.NEUTRAL_500 if not self.is_dark else Colors.NEUTRAL_400,
             on_click=lambda e: self.clear_chat(),
+            style=ft.ButtonStyle(
+                overlay_color=Colors.HOVER_OVERLAY if not self.is_dark else Colors.HOVER_OVERLAY_DARK,
+            ),
         )
 
+        # Premium header
         header = ft.Container(
             content=ft.Column([
                 ft.Row([
-                    ft.Icon(ft.Icons.SMART_TOY, color=ft.Colors.BLUE_700, size=20),
-                    ft.Text("AI Assistant", size=14, weight=ft.FontWeight.BOLD),
+                    ft.Row([
+                        ft.Container(
+                            content=ft.Icon(
+                                ft.Icons.AUTO_AWESOME,
+                                color=Colors.PRIMARY_500 if not self.is_dark else Colors.PRIMARY_300,
+                                size=18
+                            ),
+                            width=32,
+                            height=32,
+                            bgcolor=Colors.PRIMARY_50 if not self.is_dark else Colors.PRIMARY_900,
+                            border_radius=Radius.MD,
+                            alignment=ft.alignment.center,
+                        ),
+                        ft.Text(
+                            "AI Assistant",
+                            size=Typography.TITLE_SMALL.size,
+                            weight=ft.FontWeight.W_600,
+                            color=Colors.NEUTRAL_900 if not self.is_dark else Colors.NEUTRAL_100,
+                        ),
+                    ], spacing=Spacing.XS),
                     clear_btn,
-                ], spacing=8, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                self.patient_context,
-                self.doc_count,
-            ], spacing=5),
-            padding=15,
-            bgcolor=ft.Colors.BLUE_100,
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(
+                    content=ft.Column([
+                        self.patient_context,
+                        self.doc_count,
+                    ], spacing=2),
+                    padding=ft.padding.only(left=40),  # Align with title
+                ),
+            ], spacing=Spacing.XS),
+            padding=Spacing.MD,
+            bgcolor=Colors.PANEL_AGENT_BG if not self.is_dark else Colors.PANEL_AGENT_BG_DARK,
+            border=ft.border.only(
+                bottom=ft.BorderSide(1, Colors.NEUTRAL_200 if not self.is_dark else Colors.NEUTRAL_700)
+            ),
         )
 
         # Chat history
         self.chat_list = ft.ListView(
-            spacing=10,
-            padding=10,
+            spacing=Spacing.SM,
+            padding=Spacing.MD,
             expand=True,
             auto_scroll=True,
+        )
+
+        # Typing indicator (hidden by default)
+        self.typing_indicator = ft.Container(
+            content=ft.Row([
+                ft.Container(
+                    content=ft.ProgressRing(
+                        width=12, height=12, stroke_width=2,
+                        color=Colors.PRIMARY_400
+                    ),
+                ),
+                ft.Text(
+                    "AI is thinking...",
+                    size=Typography.CAPTION.size,
+                    color=Colors.NEUTRAL_500,
+                    italic=True,
+                ),
+            ], spacing=Spacing.XS),
+            visible=False,
+            padding=ft.padding.only(left=Spacing.MD, bottom=Spacing.XS),
         )
 
         # Welcome message
@@ -109,16 +164,31 @@ class AgentPanel:
         )
 
         # Loading indicator
-        self.loading_indicator = ft.ProgressRing(visible=False, width=16, height=16)
+        self.loading_indicator = ft.ProgressRing(
+            visible=False, width=18, height=18, stroke_width=2,
+            color=Colors.PRIMARY_500
+        )
 
-        # Query input
+        # Premium chat input
         self.query_field = ft.TextField(
             hint_text="Ask about this patient...",
-            border_radius=20,
-            text_size=13,
+            hint_style=ft.TextStyle(
+                size=Typography.BODY_MEDIUM.size,
+                color=Colors.NEUTRAL_400,
+            ),
+            text_size=Typography.BODY_MEDIUM.size,
+            border_radius=Radius.XXL,
+            border_color=Colors.NEUTRAL_200 if not self.is_dark else Colors.NEUTRAL_600,
+            focused_border_color=Colors.PRIMARY_400,
+            focused_border_width=2,
+            bgcolor=Colors.NEUTRAL_0 if not self.is_dark else Colors.NEUTRAL_800,
+            cursor_color=Colors.PRIMARY_500,
+            content_padding=ft.padding.symmetric(horizontal=Spacing.MD, vertical=Spacing.SM),
+            expand=True,
+            multiline=True,
             min_lines=1,
             max_lines=3,
-            expand=True,
+            shift_enter=True,
             on_submit=self._on_send_click,
             on_change=self._on_query_change,
         )
@@ -127,10 +197,15 @@ class AgentPanel:
         self.query_language_indicator = LanguageIndicator(visible=True)
 
         self.send_btn = ft.IconButton(
-            icon=ft.Icons.SEND,
-            icon_color=ft.Colors.BLUE_700,
+            icon=ft.Icons.SEND_ROUNDED,
+            icon_color=Colors.NEUTRAL_0,
+            bgcolor=Colors.PRIMARY_500,
             tooltip="Send message (Enter)",
             on_click=self._on_send_click,
+            style=ft.ButtonStyle(
+                shape=ft.CircleBorder(),
+                animation_duration=Motion.FAST,
+            ),
         )
 
         # Query input with language indicator
@@ -143,45 +218,59 @@ class AgentPanel:
             ),
         ])
 
+        # Input container
         input_row = ft.Container(
             content=ft.Row([
                 query_with_indicator,
                 self.loading_indicator,
                 self.send_btn,
-            ], spacing=5),
-            padding=10,
-            bgcolor=ft.Colors.WHITE,
-            border=ft.border.only(top=ft.BorderSide(1, ft.Colors.GREY_300)),
+            ], spacing=Spacing.XS, vertical_alignment=ft.CrossAxisAlignment.END),
+            padding=Spacing.SM,
+            bgcolor=Colors.NEUTRAL_0 if not self.is_dark else Colors.NEUTRAL_900,
+            border=ft.border.only(
+                top=ft.BorderSide(1, Colors.NEUTRAL_200 if not self.is_dark else Colors.NEUTRAL_700)
+            ),
         )
 
-        # Quick action buttons
+        # Quick action chips
         quick_actions = ft.Container(
             content=ft.Row([
-                ft.TextButton(
-                    "Last labs",
-                    style=ft.ButtonStyle(padding=5),
-                    on_click=lambda e: self._quick_query("What are the most recent lab results?"),
-                ),
-                ft.TextButton(
-                    "Medications",
-                    style=ft.ButtonStyle(padding=5),
-                    on_click=lambda e: self._quick_query("List all current medications"),
-                ),
-                ft.TextButton(
-                    "Summary",
-                    style=ft.ButtonStyle(padding=5),
-                    on_click=lambda e: self._quick_query("Give me a brief summary of this patient"),
-                ),
-            ], spacing=5, wrap=True),
-            padding=ft.padding.symmetric(horizontal=10),
+                self._quick_chip("Last labs", "What are the most recent lab results?"),
+                self._quick_chip("Medications", "List all current medications"),
+                self._quick_chip("Summary", "Give me a brief summary of this patient"),
+            ], spacing=Spacing.XS, wrap=True),
+            padding=ft.padding.symmetric(horizontal=Spacing.SM, vertical=Spacing.XS),
+            bgcolor=Colors.NEUTRAL_50 if not self.is_dark else Colors.NEUTRAL_800,
         )
 
         return ft.Column([
             header,
-            self.chat_list,
+            ft.Container(
+                content=ft.Column([
+                    self.chat_list,
+                    self.typing_indicator,
+                ], spacing=0, expand=True),
+                expand=True,
+                bgcolor=Colors.NEUTRAL_0 if not self.is_dark else Colors.NEUTRAL_900,
+            ),
             quick_actions,
             input_row,
         ], spacing=0, expand=True)
+
+    def _quick_chip(self, label: str, query: str) -> ft.Container:
+        """Create a quick action chip."""
+        return ft.Container(
+            content=ft.Text(
+                label,
+                size=Typography.LABEL_SMALL.size,
+                color=Colors.PRIMARY_600 if not self.is_dark else Colors.PRIMARY_300,
+            ),
+            bgcolor=Colors.PRIMARY_50 if not self.is_dark else Colors.PRIMARY_900,
+            border_radius=Radius.CHIP,
+            padding=ft.padding.symmetric(horizontal=Spacing.SM, vertical=Spacing.XXS),
+            on_click=lambda e, q=query: self._quick_query(q),
+            ink=True,
+        )
 
     def set_patient(self, patient: Patient):
         """Set the current patient context."""
@@ -189,9 +278,9 @@ class AgentPanel:
         self.current_patient = patient
 
         # Update context display
-        self.patient_context.value = f"Context: {patient.name}"
+        self.patient_context.value = f"Viewing: {patient.name}"
         self.patient_context.italic = False
-        self.patient_context.color = ft.Colors.BLUE_700
+        self.patient_context.color = Colors.PRIMARY_600 if not self.is_dark else Colors.PRIMARY_300
 
         # Get document count
         try:
@@ -203,11 +292,11 @@ class AgentPanel:
             doc_count = 0
             self.doc_count.value = "Error loading records"
 
-        # Clear chat history (keep welcome message)
+        # Clear chat history
         self.messages = []
         self.chat_list.controls.clear()
         self._add_assistant_message(
-            f"Now viewing records for {patient.name}. "
+            f"Now viewing records for **{patient.name}**. "
             f"I have access to {doc_count} records. What would you like to know?"
         )
 
@@ -227,33 +316,87 @@ class AgentPanel:
         self._render_message(msg)
 
     def _render_message(self, msg: ChatMessage):
-        """Render a message in the chat list."""
+        """Render a premium chat bubble."""
         is_user = msg.role == "user"
 
-        bubble = ft.Container(
-            content=ft.Text(
-                msg.content,
-                size=13,
-                color=ft.Colors.WHITE if is_user else ft.Colors.BLACK,
-                selectable=True,
-            ),
-            bgcolor=ft.Colors.BLUE_700 if is_user else ft.Colors.WHITE,
-            padding=ft.padding.all(12),
-            border_radius=ft.border_radius.only(
-                top_left=15,
-                top_right=15,
-                bottom_left=5 if is_user else 15,
-                bottom_right=15 if is_user else 5,
-            ),
-            border=None if is_user else ft.border.all(1, ft.Colors.GREY_300),
+        # Premium bubble styling
+        if is_user:
+            bubble = ft.Container(
+                content=ft.Text(
+                    msg.content,
+                    size=Typography.BODY_MEDIUM.size,
+                    color=Colors.NEUTRAL_0,
+                    selectable=True,
+                ),
+                bgcolor=Colors.PRIMARY_500,
+                padding=ft.padding.all(Spacing.SM),
+                border_radius=ft.border_radius.only(
+                    top_left=Radius.LG,
+                    top_right=Radius.LG,
+                    bottom_left=Radius.LG,
+                    bottom_right=Radius.XS,
+                ),
+                shadow=ft.BoxShadow(
+                    blur_radius=4,
+                    spread_radius=0,
+                    offset=ft.Offset(0, 2),
+                    color="rgba(26, 115, 232, 0.2)"
+                ),
+            )
+        else:
+            bubble = ft.Container(
+                content=ft.Column([
+                    ft.Icon(
+                        ft.Icons.AUTO_AWESOME,
+                        size=14,
+                        color=Colors.PRIMARY_400,
+                    ),
+                    ft.Text(
+                        msg.content,
+                        size=Typography.BODY_MEDIUM.size,
+                        color=Colors.NEUTRAL_800 if not self.is_dark else Colors.NEUTRAL_200,
+                        selectable=True,
+                    ),
+                ], spacing=Spacing.XS),
+                bgcolor=Colors.NEUTRAL_100 if not self.is_dark else Colors.NEUTRAL_800,
+                padding=ft.padding.all(Spacing.SM),
+                border_radius=ft.border_radius.only(
+                    top_left=Radius.XS,
+                    top_right=Radius.LG,
+                    bottom_left=Radius.LG,
+                    bottom_right=Radius.LG,
+                ),
+                border=ft.border.all(1, Colors.NEUTRAL_200 if not self.is_dark else Colors.NEUTRAL_700),
+            )
+
+        # Timestamp (subtle)
+        time_text = ft.Text(
+            msg.timestamp.strftime("%H:%M"),
+            size=Typography.CAPTION.size - 1,
+            color=Colors.NEUTRAL_400,
         )
 
-        row = ft.Row(
-            [bubble],
-            alignment=ft.MainAxisAlignment.END if is_user else ft.MainAxisAlignment.START,
+        row = ft.Column([
+            ft.Row(
+                [bubble],
+                alignment=ft.MainAxisAlignment.END if is_user else ft.MainAxisAlignment.START,
+            ),
+            ft.Row(
+                [time_text],
+                alignment=ft.MainAxisAlignment.END if is_user else ft.MainAxisAlignment.START,
+            ),
+        ], spacing=2)
+
+        self.chat_list.controls.append(
+            ft.Container(
+                content=row,
+                padding=ft.padding.only(
+                    left=Spacing.XL if is_user else 0,
+                    right=0 if is_user else Spacing.XL,
+                ),
+            )
         )
 
-        self.chat_list.controls.append(row)
         if self.chat_list.page:
             self.chat_list.update()
 
@@ -291,21 +434,24 @@ class AgentPanel:
             return
 
         logger.info(f"Sending RAG query from agent panel: {query}")
+
         # Add user message
         self._add_user_message(query)
 
         # Clear input
         self.query_field.value = ""
 
-        # Show loading
+        # Show loading state
         self.loading_indicator.visible = True
         self.send_btn.disabled = True
+        self.typing_indicator.visible = True
         if self.loading_indicator.page:
             self.loading_indicator.page.update()
 
         def callback(success: bool, response: str):
             self.loading_indicator.visible = False
             self.send_btn.disabled = False
+            self.typing_indicator.visible = False
 
             if success:
                 logger.debug("RAG query successful, displaying response")
@@ -321,21 +467,17 @@ class AgentPanel:
 
     def clear_chat(self):
         """Clear the chat history."""
-        # Keep only the welcome message for the current patient
         if self.current_patient:
             self.messages = []
             self.chat_list.controls.clear()
 
-            # Get document count
             doc_count = self.rag.get_patient_document_count(self.current_patient.id)
 
-            # Re-add welcome message
             self._add_assistant_message(
-                f"Chat cleared. Still viewing records for {self.current_patient.name}. "
+                f"Chat cleared. Still viewing records for **{self.current_patient.name}**. "
                 f"I have access to {doc_count} records. What would you like to know?"
             )
         else:
-            # No patient selected, just show default message
             self.messages = []
             self.chat_list.controls.clear()
             self._add_assistant_message(

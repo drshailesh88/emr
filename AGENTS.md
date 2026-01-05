@@ -107,20 +107,40 @@ right AI assistant for RAG queries.
 
 ## Development Toolkit (MANDATORY)
 
-> **🔴 CRITICAL**: These tools are REQUIRED for all complex development. If you're about to implement a feature, refactor code, or fix bugs — STOP and use these tools first.
+> **🔴 CRITICAL**: These tools are REQUIRED for all complex development. If you're about to implement a feature, refactor code, or fix bugs — STOP and use these tools first. On every context reset, re-read this section before proceeding.
 
 ### Spec-Kit (Specification-Driven Development)
 - Source: https://github.com/github/spec-kit
 - Install: `uvx specify` or `uv tool install specify`
+- Specs Location: `.specify/specs/` — All feature specifications live here
 - Commands: `/speckit.constitution`, `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`
 - When to use: New features, major refactors, unclear requirements
 - Workflow: Always run `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` before coding
+- Always check: `.specify/ROADMAP.md` for current project state
 
 ### Ralph Wiggum (Iterative Loop Development)
 - Source: https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum
 - Commands: `/ralph-loop "<prompt>" --max-iterations <n> --completion-promise "<text>"`, `/cancel-ralph`
 - When to use: TDD cycles, bug fixing loops, iterative refinement
 - Example: `/ralph-loop "fix all type errors" --max-iterations 10 --completion-promise "0 errors"`
+
+## Premium UI Philosophy (CRITICAL)
+
+Goal: Create a habit-forming product that feels like Apple/Mercedes/Nike.
+
+### Design Principles
+1. Quiet Luxury: Restrained palette, generous whitespace, subtle depth
+2. Professional Authority: Medical-grade precision, clear hierarchy
+3. Effortless Flow: Zero cognitive friction, natural eye movement
+
+### UI Implementation Rules
+1. NEVER use hard-coded colors — Use design tokens from `src/ui/tokens.py`
+2. NEVER use magic numbers — Use spacing scale (4, 8, 12, 16, 24, 32px)
+3. Component files < 300 lines — Extract sub-components when growing
+4. Premium animations — Subtle hover, smooth transitions, micro-interactions
+5. Consistent typography — Use typography scale, not arbitrary font sizes
+
+Current UI Spec: `.specify/specs/22-premium-ui/spec.md`
 
 ## Cloud Backup Strategy (E2E Encrypted)
 
