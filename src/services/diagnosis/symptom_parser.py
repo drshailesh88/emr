@@ -69,9 +69,20 @@ class SymptomParser:
             r'\bulti\b': 'vomiting',
             r'\bdast\b': 'diarrhea',
             r'\bkamzori\b': 'weakness',
+            r'\bthakan\b': 'fatigue',
             r'\bthakaan\b': 'fatigue',
             r'\bbadan dard\b': 'body ache',
             r'\bjodo mein dard\b': 'joint pain',
+            r'\bchakkar\b': 'dizziness',
+            r'\bneend nahi\b': 'insomnia',
+            r'\bneend nahi aati\b': 'insomnia',
+            r'\bbhookh nahi\b': 'anorexia',
+            r'\bpeshab mein jalan\b': 'dysuria',
+            r'\bkhoon\b': 'blood',
+            r'\bkhoon aana\b': 'bleeding',
+            r'\bsoojan\b': 'swelling',
+            r'\bkhujli\b': 'itching',
+            r'\bpetdard\b': 'abdominal pain',
         }
 
     def _load_symptom_patterns(self) -> None:
@@ -170,11 +181,17 @@ class SymptomParser:
             ],
 
             # GI symptoms
+            'abdominal_pain': [
+                r'\babdominal\s+pain\b',
+                r'\bpet\s+dard\b',
+                r'\bpetdard\b',
+                r'\bstomach\s+pain\b',
+                r'\bbelly\s+pain\b',
+            ],
             'abdominal_pain_epigastric': [
                 r'\bepigastric\s+pain\b',
                 r'\bupper\s+abdominal\s+pain\b',
                 r'\bpain\s+in\s+upper\s+abdomen\b',
-                r'\bstomach\s+pain\b',
             ],
             'abdominal_pain_right_upper_quadrant': [
                 r'\bright\s+upper\s+quadrant\s+pain\b',
@@ -206,6 +223,12 @@ class SymptomParser:
             ],
 
             # Neurological
+            'headache': [
+                r'\bheadache\b',
+                r'\bsir\s+dard\b',
+                r'\bsirdard\b',
+                r'\bhead\s+pain\b',
+            ],
             'headache_severe_sudden': [
                 r'\bsevere\s+headache\b',
                 r'\bsudden\s+headache\b',
@@ -301,6 +324,315 @@ class SymptomParser:
                 r'\bradiat(ing|ion)\s+to\s+(left\s+)?arm\b',
                 r'\bpain\s+in\s+(left\s+)?arm\b',
                 r'\barm\s+pain\b',
+            ],
+
+            # PEDIATRIC SYMPTOMS
+            'crying_excessively': [
+                r'\bcrying\s+excessively\b',
+                r'\binconsolable\s+crying\b',
+                r'\bhigh[\s-]?pitched\s+cry(ing)?\b',
+                r'\bcontinuous\s+crying\b',
+                r'\bnot\s+consolable\b',
+            ],
+            'not_feeding': [
+                r'\bnot\s+feeding\b',
+                r'\brefusing\s+feeds\b',
+                r'\bpoor\s+feeding\b',
+                r'\bnot\s+taking\s+(milk|feeds)\b',
+                r'\bfeeding\s+difficulty\b',
+                r'\bnot\s+taking\s+feeds\b',
+            ],
+            'lethargy_child': [
+                r'\blethargic\b',
+                r'\bnot\s+active\b',
+                r'\bvery\s+sleepy\b',
+                r'\bunresponsive\b',
+                r'\bnot\s+responding\b',
+            ],
+            'rash_with_fever_child': [
+                r'\brash\s+with\s+fever\b',
+                r'\bfever\s+with\s+rash\b',
+                r'\bskin\s+eruption\b.*\bfever\b',
+            ],
+            'bulging_fontanelle': [
+                r'\bbulging\s+fontanelle\b',
+                r'\bfontanelle\s+bulging\b',
+                r'\btense\s+fontanelle\b',
+            ],
+            'stridor': [
+                r'\bstridor\b',
+                r'\bnoisy\s+breathing\b',
+                r'\brespiratory\s+noise\b',
+            ],
+            'barking_cough': [
+                r'\bbarking\s+cough\b',
+                r'\bcroupy\s+cough\b',
+                r'\bseal[\s-]?like\s+cough\b',
+            ],
+            'drooling': [
+                r'\bdrooling\b',
+                r'\bexcessive\s+salivation\b',
+                r'\bsaliva\s+dripping\b',
+            ],
+            'vomiting_child': [
+                r'\bvomiting\b',
+                r'\bprojectile\s+vomiting\b',
+                r'\bthrows\s+up\b',
+            ],
+            'loose_stools': [
+                r'\bloose\s+stools\b',
+                r'\bwatery\s+stools\b',
+                r'\bdiarr[he]a\b',
+                r'\bdast\b',
+            ],
+            'dehydration_signs': [
+                r'\bdehydration\b',
+                r'\bdry\s+mouth\b',
+                r'\bsunken\s+eyes\b',
+                r'\bskin\s+turgor\s+decreased\b',
+                r'\bno\s+tears\b',
+            ],
+            'seizure_child': [
+                r'\bseizure\b',
+                r'\bconvulsion\b',
+                r'\bfits\b',
+                r'\bjerkings\b',
+                r'\bshaking\s+movements\b',
+            ],
+            'febrile_convulsion': [
+                r'\bfebrile\s+convulsion\b',
+                r'\bfebrile\s+seizure\b',
+                r'\bfits\s+with\s+fever\b',
+            ],
+
+            # OBSTETRIC SYMPTOMS
+            'vaginal_bleeding': [
+                r'\bvaginal\s+bleeding\b',
+                r'\bbleeding\s+pv\b',
+                r'\bspotting\b',
+                r'\bbleeding\s+per\s+vaginum\b',
+            ],
+            'leaking_pv': [
+                r'\bleaking\s+pv\b',
+                r'\bwater\s+leaking\b',
+                r'\bleaking\s+per\s+vaginum\b',
+                r'\bmembrane\s+rupture\b',
+                r'\bwater\s+broke\b',
+            ],
+            'decreased_fetal_movements': [
+                r'\bdecreased\s+fetal\s+movements\b',
+                r'\bbaby\s+not\s+moving\b',
+                r'\breduced\s+kicks\b',
+                r'\bno\s+fetal\s+movements\b',
+            ],
+            'contractions': [
+                r'\bcontractions\b',
+                r'\blabor\s+pains\b',
+                r'\buterine\s+contractions\b',
+                r'\bpains\s+coming\s+regularly\b',
+            ],
+            'headache_with_high_bp': [
+                r'\bheadache\s+with\s+(high\s+)?bp\b',
+                r'\bheadache\b.*\bhypertension\b',
+                r'\bsevere\s+headache\b.*\bpregnancy\b',
+            ],
+            'visual_disturbances': [
+                r'\bvisual\s+disturbances\b',
+                r'\bblurred\s+vision\b',
+                r'\bseeing\s+spots\b',
+                r'\bflashing\s+lights\b',
+            ],
+            'swelling_feet_face': [
+                r'\bswelling\s+of\s+feet\b',
+                r'\bswelling\s+of\s+face\b',
+                r'\bpedal\s+edema\b',
+                r'\bfacial\s+puffiness\b',
+                r'\bsoojan\b',
+            ],
+            'epigastric_pain_pregnancy': [
+                r'\bepigastric\s+pain\b.*\bpregnancy\b',
+                r'\bupper\s+abdominal\s+pain\b.*\bpregnant\b',
+            ],
+
+            # PSYCHIATRIC SYMPTOMS
+            'suicidal_ideation': [
+                r'\bsuicidal\s+ideation\b',
+                r'\bsuicidal\s+thoughts\b',
+                r'\bwants\s+to\s+die\b',
+                r'\bthinking\s+of\s+suicide\b',
+                r'\bwants\s+to\s+kill\s+self\b',
+            ],
+            'self_harm': [
+                r'\bself[\s-]?harm\b',
+                r'\bcutting\b',
+                r'\bburning\s+self\b',
+                r'\bhurt(ing)?\s+(him|her)self\b',
+            ],
+            'hearing_voices': [
+                r'\bhearing\s+voices\b',
+                r'\bauditory\s+hallucinations\b',
+                r'\bvoices\s+in\s+head\b',
+            ],
+            'seeing_things': [
+                r'\bseeing\s+things\b',
+                r'\bvisual\s+hallucinations\b',
+                r'\bseeing\s+shadows\b',
+            ],
+            'insomnia': [
+                r'\binsomnia\b',
+                r'\bnot\s+sleeping\b',
+                r'\bcan\'?t\s+sleep\b',
+                r'\bsleep\s+disturbance\b',
+                r'\bneend\s+nahi\b',
+            ],
+            'racing_thoughts': [
+                r'\bracing\s+thoughts\b',
+                r'\bthoughts\s+racing\b',
+                r'\brapid\s+thoughts\b',
+                r'\bflight\s+of\s+ideas\b',
+            ],
+            'excessive_worry': [
+                r'\bexcessive\s+worry\b',
+                r'\banxiety\b',
+                r'\bworrying\s+too\s+much\b',
+                r'\bconstant\s+worry\b',
+            ],
+            'panic_attacks': [
+                r'\bpanic\s+attacks\b',
+                r'\bpanic\b',
+                r'\bsudden\s+fear\b',
+                r'\bheart\s+racing\s+with\s+fear\b',
+            ],
+            'memory_problems': [
+                r'\bmemory\s+problems\b',
+                r'\bforgetfulness\b',
+                r'\bmemory\s+loss\b',
+                r'\bcan\'?t\s+remember\b',
+            ],
+            'confusion': [
+                r'\bconfusion\b',
+                r'\bconfused\b',
+                r'\bdisoriented\b',
+                r'\bnot\s+aware\b',
+            ],
+
+            # OPHTHALMOLOGIC SYMPTOMS
+            'sudden_vision_loss': [
+                r'\bsudden\s+vision\s+loss\b',
+                r'\bvision\s+loss\b',
+                r'\bcan\'?t\s+see\b',
+                r'\blost\s+vision\b',
+                r'\bblindness\b',
+            ],
+            'floaters': [
+                r'\bfloaters\b',
+                r'\bseeing\s+spots\b',
+                r'\bflying\s+objects\b',
+                r'\bdots\s+in\s+vision\b',
+            ],
+            'red_eye': [
+                r'\bred\s+eye\b',
+                r'\beye\s+redness\b',
+                r'\bbloodshot\s+eye\b',
+            ],
+            'photophobia': [
+                r'\bphotophobia\b',
+                r'\blight\s+sensitivity\b',
+                r'\bcan\'?t\s+tolerate\s+light\b',
+            ],
+            'eye_pain': [
+                r'\beye\s+pain\b',
+                r'\bpain\s+in\s+eye\b',
+                r'\bocular\s+pain\b',
+            ],
+            'eye_discharge': [
+                r'\beye\s+discharge\b',
+                r'\bpus\s+from\s+eye\b',
+                r'\bwatery\s+eye\b',
+                r'\beye\s+secretions\b',
+            ],
+            'double_vision': [
+                r'\bdouble\s+vision\b',
+                r'\bdiplopia\b',
+                r'\bseeing\s+double\b',
+            ],
+
+            # DERMATOLOGIC SYMPTOMS
+            'itching': [
+                r'\bitching\b',
+                r'\bpruritus\b',
+                r'\bitchy\s+skin\b',
+                r'\bkhujli\b',
+            ],
+            'rash': [
+                r'\brash\b',
+                r'\bskin\s+eruption\b',
+                r'\bskin\s+lesions\b',
+            ],
+            'blisters': [
+                r'\bblisters\b',
+                r'\bvesicles\b',
+                r'\bbullae\b',
+                r'\bfluid[\s-]?filled\s+lesions\b',
+            ],
+            'hair_loss': [
+                r'\bhair\s+loss\b',
+                r'\balopecia\b',
+                r'\bbalding\b',
+                r'\bhair\s+falling\b',
+            ],
+            'nail_changes': [
+                r'\bnail\s+changes\b',
+                r'\bnail\s+discoloration\b',
+                r'\bnail\s+thickening\b',
+            ],
+            'skin_lesions': [
+                r'\bskin\s+lesions\b',
+                r'\bgrowth\s+on\s+skin\b',
+                r'\bbump\b',
+                r'\blump\s+on\s+skin\b',
+            ],
+            'mole_changing': [
+                r'\bmole\s+changing\b',
+                r'\bmole\s+growing\b',
+                r'\bnew\s+mole\b',
+                r'\bmole\s+bleeding\b',
+            ],
+
+            # UROLOGIC SYMPTOMS
+            'burning_urination': [
+                r'\bburning\s+urination\b',
+                r'\bdysuria\b',
+                r'\bpainful\s+urination\b',
+                r'\bpeshab\s+mein\s+jalan\b',
+            ],
+            'urinary_frequency': [
+                r'\burinary\s+frequency\b',
+                r'\bfrequent\s+urination\b',
+                r'\bbar\s+bar\s+peshab\b',
+            ],
+            'blood_in_urine': [
+                r'\bblood\s+in\s+urine\b',
+                r'\bhematuria\b',
+                r'\bred\s+urine\b',
+                r'\bpeshab\s+mein\s+khoon\b',
+            ],
+            'urinary_retention': [
+                r'\burinary\s+retention\b',
+                r'\bcan\'?t\s+pass\s+urine\b',
+                r'\bunable\s+to\s+urinate\b',
+                r'\bpeshab\s+nahi\s+ho\s+raha\b',
+            ],
+            'flank_pain': [
+                r'\bflank\s+pain\b',
+                r'\bloin\s+pain\b',
+                r'\bside\s+pain\b',
+                r'\bkidney\s+pain\b',
+            ],
+            'testicular_pain': [
+                r'\btesticular\s+pain\b',
+                r'\bscrotal\s+pain\b',
+                r'\bpain\s+in\s+testicle\b',
             ],
         }
 

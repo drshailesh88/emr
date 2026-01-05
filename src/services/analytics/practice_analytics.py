@@ -295,6 +295,34 @@ class PracticeAnalytics:
             "recommendations": self._get_efficiency_recommendations(no_shows, cancellations, total),
         }
 
+    def get_total_patients(self) -> int:
+        """Get total count of patients."""
+        return self.db.get_total_patients() if self.db else 0
+
+    def get_patients_this_month(self) -> int:
+        """Get count of new patients this month."""
+        return self.db.get_patients_this_month() if self.db else 0
+
+    def get_visits_today(self) -> int:
+        """Get count of visits today."""
+        return self.db.get_visits_today() if self.db else 0
+
+    def get_visits_this_week(self) -> int:
+        """Get count of visits in the last 7 days."""
+        return self.db.get_visits_this_week() if self.db else 0
+
+    def get_top_diagnoses(self, n: int = 10) -> List[Tuple[str, int]]:
+        """Get most common diagnoses."""
+        return self.db.get_top_diagnoses(n) if self.db else []
+
+    def get_busiest_hours(self) -> Dict[int, int]:
+        """Get visit distribution by hour."""
+        return self.db.get_visits_by_hour() if self.db else {}
+
+    def get_patient_demographics(self) -> Dict:
+        """Get patient demographics (age and gender distribution)."""
+        return self.db.get_patient_demographics() if self.db else {"gender": {}, "age_groups": {}}
+
     def _get_visits_for_date(self, target_date: date) -> List[Dict]:
         """Get visits for a specific date."""
         if self.db:
@@ -309,15 +337,13 @@ class PracticeAnalytics:
 
     def _get_appointments_for_date(self, target_date: date) -> List[Dict]:
         """Get appointments for a specific date."""
-        if self.db:
-            return self.db.get_appointments_by_date(target_date)
-        return []
+        # Appointments table doesn't exist yet, use visits as proxy
+        return self._get_visits_for_date(target_date)
 
     def _get_appointments_for_period(self, start: date, end: date) -> List[Dict]:
         """Get appointments for a date range."""
-        if self.db:
-            return self.db.get_appointments_by_date_range(start, end)
-        return []
+        # Appointments table doesn't exist yet, use visits as proxy
+        return self._get_visits_for_period(start, end)
 
     def _get_week_totals(self, week_start: date) -> Dict:
         """Get totals for a week."""

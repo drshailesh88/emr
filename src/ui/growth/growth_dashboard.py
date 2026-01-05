@@ -2,8 +2,12 @@
 
 import flet as ft
 from typing import List, Dict, Optional, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from .metrics_card import MetricsCard
+from .charts import BarChart, PieChart, LineChart
+from ...services.analytics.practice_analytics import PracticeAnalytics
+from ...services.analytics.patient_acquisition import PatientAcquisition
+from ...services.analytics.retention_tracker import RetentionTracker
 
 
 class GrowthDashboard(ft.UserControl):
@@ -13,10 +17,17 @@ class GrowthDashboard(ft.UserControl):
 
     def __init__(
         self,
+        db_service,
         on_action_click: Optional[Callable] = None,
     ):
         super().__init__()
+        self.db_service = db_service
         self.on_action_click = on_action_click
+
+        # Initialize analytics services
+        self.practice_analytics = PracticeAnalytics(db_service)
+        self.patient_acquisition = PatientAcquisition(db_service)
+        self.retention_tracker = RetentionTracker(db_service)
 
         # Time period selection
         self.selected_period = "week"  # "day", "week", "month"
@@ -34,117 +45,185 @@ class GrowthDashboard(ft.UserControl):
 
     def load_data(self):
         """Load analytics data from services."""
-        # TODO: Connect to actual analytics service
-        # For now, using mock data
-        self.metrics = {
-            "today_patients": {"value": 24, "trend": 12.5, "sparkline": [18, 20, 22, 19, 24, 23, 24]},
-            "week_revenue": {"value": "₹45,600", "trend": 8.3, "sparkline": [32000, 38000, 42000, 40000, 45600]},
-            "new_patients": {"value": 8, "trend": -5.2, "sparkline": [10, 12, 9, 8, 11, 9, 8]},
-            "avg_rating": {"value": "4.7", "trend": 2.1, "sparkline": [4.5, 4.6, 4.6, 4.7, 4.7]},
-        }
+        try:
+            # Get real metrics from database
+            total_patients = self.practice_analytics.get_total_patients()
+            patients_this_month = self.practice_analytics.get_patients_this_month()
+            visits_today = self.practice_analytics.get_visits_today()
+            visits_this_week = self.practice_analytics.get_visits_this_week()
 
-        self.revenue_data = {
-            "daily": [
-                {"date": datetime.now() - timedelta(days=6), "amount": 5200},
-                {"date": datetime.now() - timedelta(days=5), "amount": 6800},
-                {"date": datetime.now() - timedelta(days=4), "amount": 7200},
-                {"date": datetime.now() - timedelta(days=3), "amount": 6400},
-                {"date": datetime.now() - timedelta(days=2), "amount": 8100},
-                {"date": datetime.now() - timedelta(days=1), "amount": 6900},
-                {"date": datetime.now(), "amount": 5000},
-            ],
-            "weekly": [
-                {"date": datetime.now() - timedelta(weeks=4), "amount": 38000},
-                {"date": datetime.now() - timedelta(weeks=3), "amount": 42000},
-                {"date": datetime.now() - timedelta(weeks=2), "amount": 40000},
-                {"date": datetime.now() - timedelta(weeks=1), "amount": 45600},
-            ],
-            "monthly": [
-                {"date": datetime.now() - timedelta(days=150), "amount": 165000},
-                {"date": datetime.now() - timedelta(days=120), "amount": 172000},
-                {"date": datetime.now() - timedelta(days=90), "amount": 168000},
-                {"date": datetime.now() - timedelta(days=60), "amount": 180000},
-                {"date": datetime.now() - timedelta(days=30), "amount": 182400},
-            ],
-        }
+            # Calculate trends (simplified - comparing to previous periods)
+            # For a real implementation, you'd compare to last week/month
+            today_trend = 0.0  # Placeholder
+            week_trend = 0.0  # Placeholder
+            new_patients_trend = self.patient_acquisition.get_growth_rate()
 
+            # Build metrics
+            self.metrics = {
+                "today_patients": {
+                    "value": visits_today,
+                    "trend": today_trend,
+                    "sparkline": [visits_today] * 7  # Simplified
+                },
+                "week_revenue": {
+                    "value": f"₹0",  # Revenue tracking not implemented yet
+                    "trend": week_trend,
+                    "sparkline": [0] * 5
+                },
+                "new_patients": {
+                    "value": patients_this_month,
+                    "trend": new_patients_trend,
+                    "sparkline": [patients_this_month] * 7
+                },
+                "avg_rating": {
+                    "value": "N/A",  # Rating tracking not implemented yet
+                    "trend": 0.0,
+                    "sparkline": [4.5] * 5
+                },
+            }
+        except Exception as e:
+            # Fallback to mock data if real data fails
+            self.metrics = {
+                "today_patients": {"value": 0, "trend": 0, "sparkline": [0]},
+                "week_revenue": {"value": "₹0", "trend": 0, "sparkline": [0]},
+                "new_patients": {"value": 0, "trend": 0, "sparkline": [0]},
+                "avg_rating": {"value": "N/A", "trend": 0, "sparkline": [0]},
+            }
+
+        # Load visit data for revenue chart (using visits as proxy since no revenue tracking yet)
+        try:
+            # Get visits for last 7 days
+            daily_visits = []
+            for i in range(6, -1, -1):
+                target_date = date.today() - timedelta(days=i)
+                visits = self.db_service.get_visits_by_date(target_date)
+                daily_visits.append({
+                    "date": datetime.combine(target_date, datetime.min.time()),
+                    "amount": len(visits)  # Using visit count as proxy
+                })
+
+            # Get visits for last 4 weeks
+            weekly_visits = []
+            for i in range(3, -1, -1):
+                week_start = date.today() - timedelta(weeks=i+1)
+                week_end = date.today() - timedelta(weeks=i)
+                visits = self.db_service.get_visits_by_date_range(week_start, week_end)
+                weekly_visits.append({
+                    "date": datetime.combine(week_start, datetime.min.time()),
+                    "amount": len(visits)
+                })
+
+            self.revenue_data = {
+                "daily": daily_visits,
+                "weekly": weekly_visits,
+                "monthly": weekly_visits,  # Using weekly for now
+            }
+        except:
+            # Fallback
+            self.revenue_data = {
+                "daily": [{"date": datetime.now(), "amount": 0}],
+                "weekly": [{"date": datetime.now(), "amount": 0}],
+                "monthly": [{"date": datetime.now(), "amount": 0}],
+            }
+
+        # Patient sources (placeholder - source tracking not implemented yet)
         self.patient_sources = {
-            "Referral": 45,
-            "Google Search": 25,
-            "Walk-in": 15,
-            "Social Media": 10,
-            "Other": 5,
+            "Walk-in": total_patients,  # Default all to walk-in for now
         }
 
-        self.followup_stats = {
-            "total_due": 120,
-            "completed": 72,
-            "overdue": 15,
-            "scheduled": 33,
-        }
+        # Follow-up stats
+        try:
+            returning = self.retention_tracker.get_returning_patients()
+            self.followup_stats = {
+                "total_due": total_patients,
+                "completed": returning,
+                "overdue": 0,  # Not tracked yet
+                "scheduled": total_patients - returning,
+            }
+        except:
+            self.followup_stats = {
+                "total_due": 0,
+                "completed": 0,
+                "overdue": 0,
+                "scheduled": 0,
+            }
 
-        self.reviews = [
-            {
-                "patient": "R***a S.",
-                "rating": 5,
-                "comment": "Excellent doctor, very attentive and thorough.",
-                "date": datetime.now() - timedelta(days=1),
-                "sentiment": "positive",
-            },
-            {
-                "patient": "A***t K.",
-                "rating": 4,
-                "comment": "Good experience, but waiting time was long.",
-                "date": datetime.now() - timedelta(days=3),
-                "sentiment": "neutral",
-            },
-            {
-                "patient": "P***a M.",
-                "rating": 5,
-                "comment": "Best cardiologist in the area. Highly recommend!",
-                "date": datetime.now() - timedelta(days=5),
-                "sentiment": "positive",
-            },
-        ]
+        # Reviews (not implemented yet - placeholder)
+        self.reviews = []
 
-        self.recommendations = [
-            {
-                "type": "followup",
-                "priority": "high",
-                "title": "15 patients overdue for follow-up",
-                "description": "These patients haven't returned for scheduled follow-ups. Reaching out may prevent complications.",
-                "action": "Send reminders",
-                "icon": ft.icons.SCHEDULE,
-                "color": ft.colors.ORANGE_600,
-            },
-            {
-                "type": "rating",
-                "priority": "medium",
-                "title": "Rating dropped by 0.2 stars",
-                "description": "Recent feedback mentions long waiting times. Consider optimizing scheduling.",
-                "action": "View feedback",
-                "icon": ft.icons.STAR_RATE,
-                "color": ft.colors.AMBER_600,
-            },
-            {
-                "type": "schedule",
-                "priority": "low",
-                "title": "Wednesdays are slow",
-                "description": "Average only 12 patients on Wednesdays vs 22 on other days. Consider promotions or extending hours.",
-                "action": "Analyze schedule",
-                "icon": ft.icons.CALENDAR_TODAY,
-                "color": ft.colors.BLUE_600,
-            },
-            {
-                "type": "acquisition",
-                "priority": "medium",
-                "title": "45% patients from referrals",
-                "description": "Your referral rate is excellent! Consider a referral rewards program to boost it further.",
-                "action": "Set up rewards",
-                "icon": ft.icons.PEOPLE,
-                "color": ft.colors.GREEN_600,
-            },
-        ]
+        # Generate recommendations based on real data
+        self.recommendations = []
+        try:
+            # Recommendation 1: Churned patients
+            churned = self.retention_tracker.get_patient_churn(180)
+            if churned:
+                self.recommendations.append({
+                    "type": "followup",
+                    "priority": "high",
+                    "title": f"{len(churned)} patients haven't visited in 6 months",
+                    "description": "These patients may have churned. Reaching out could win them back.",
+                    "action": "View list",
+                    "icon": ft.icons.SCHEDULE,
+                    "color": ft.colors.ORANGE_600,
+                })
+
+            # Recommendation 2: Patient growth
+            if new_patients_trend > 0:
+                self.recommendations.append({
+                    "type": "acquisition",
+                    "priority": "medium",
+                    "title": f"Patient growth up {new_patients_trend:.1f}%",
+                    "description": "Your practice is growing! Keep up the momentum.",
+                    "action": "View details",
+                    "icon": ft.icons.TRENDING_UP,
+                    "color": ft.colors.GREEN_600,
+                })
+            elif new_patients_trend < -10:
+                self.recommendations.append({
+                    "type": "acquisition",
+                    "priority": "high",
+                    "title": f"Patient growth down {abs(new_patients_trend):.1f}%",
+                    "description": "New patient acquisition is declining. Consider marketing efforts.",
+                    "action": "View details",
+                    "icon": ft.icons.TRENDING_DOWN,
+                    "color": ft.colors.RED_600,
+                })
+
+            # Recommendation 3: Today's visits
+            if visits_today == 0:
+                self.recommendations.append({
+                    "type": "schedule",
+                    "priority": "low",
+                    "title": "No visits recorded today",
+                    "description": "Make sure to log all patient visits for accurate analytics.",
+                    "action": "Add visit",
+                    "icon": ft.icons.CALENDAR_TODAY,
+                    "color": ft.colors.BLUE_600,
+                })
+            elif visits_today > 20:
+                self.recommendations.append({
+                    "type": "schedule",
+                    "priority": "medium",
+                    "title": "Busy day - excellent!",
+                    "description": f"{visits_today} visits today. Your practice is thriving!",
+                    "action": "View today",
+                    "icon": ft.icons.CELEBRATION,
+                    "color": ft.colors.GREEN_600,
+                })
+
+            # Add default recommendation if none generated
+            if not self.recommendations:
+                self.recommendations.append({
+                    "type": "info",
+                    "priority": "low",
+                    "title": "Start tracking your practice",
+                    "description": "Add patients and visits to get personalized insights.",
+                    "action": "Add patient",
+                    "icon": ft.icons.INFO,
+                    "color": ft.colors.BLUE_600,
+                })
+        except:
+            pass
 
         self.loading = False
         self.update()
@@ -211,35 +290,43 @@ class GrowthDashboard(ft.UserControl):
         )
 
     def _build_revenue_chart(self) -> ft.Container:
-        """Revenue trend chart with period toggle."""
+        """Visits trend chart with period toggle."""
         # Get data for selected period
         data = self.revenue_data.get(self.selected_period.lower() + "ly", self.revenue_data["daily"])
 
+        if not data or len(data) == 0:
+            return ft.Container(
+                content=ft.Text("No visit data available", color=ft.colors.GREY_600),
+                padding=20,
+            )
+
         # Calculate max for scaling
-        max_amount = max(d["amount"] for d in data) * 1.1
+        max_amount = max(d["amount"] for d in data) * 1.1 if data else 1
+        if max_amount == 0:
+            max_amount = 1
         chart_height = 200
 
         # Create bars
         bars = []
         for i, item in enumerate(data):
-            bar_height = (item["amount"] / max_amount) * chart_height
-            date_label = item["date"].strftime("%d %b") if self.selected_period == "day" else item["date"].strftime("%d %b")
+            bar_height = (item["amount"] / max_amount) * chart_height if max_amount > 0 else 0
+            date_label = item["date"].strftime("%d %b")
 
             bars.append(
                 ft.Column(
                     controls=[
                         ft.Text(
-                            f"₹{item['amount']:,}",
+                            f"{item['amount']}",
                             size=10,
                             weight=ft.FontWeight.BOLD,
                             color=ft.colors.GREY_700,
                         ),
                         ft.Container(
                             width=50,
-                            height=bar_height,
-                            bgcolor=ft.colors.GREEN_400,
+                            height=max(bar_height, 5),  # Minimum height for visibility
+                            bgcolor=ft.colors.BLUE_400,
                             border_radius=ft.border_radius.only(top_left=4, top_right=4),
-                            tooltip=f"{date_label}: ₹{item['amount']:,}",
+                            tooltip=f"{date_label}: {item['amount']} visits",
                         ),
                         ft.Text(
                             date_label,
@@ -259,7 +346,7 @@ class GrowthDashboard(ft.UserControl):
                     # Header with period toggle
                     ft.Row(
                         controls=[
-                            ft.Text("Revenue Trend", size=18, weight=ft.FontWeight.BOLD),
+                            ft.Text("Visits Trend", size=18, weight=ft.FontWeight.BOLD),
                             ft.Container(expand=True),
                             ft.SegmentedButton(
                                 selected={"day"} if self.selected_period == "day" else {"week"} if self.selected_period == "week" else {"month"},
@@ -432,71 +519,51 @@ class GrowthDashboard(ft.UserControl):
             bgcolor=ft.colors.WHITE,
         )
 
-    def _build_reviews_section(self) -> ft.Container:
-        """Recent reviews with sentiment indicators."""
-        review_items = []
+    def _build_top_diagnoses(self) -> ft.Container:
+        """Top diagnoses chart."""
+        try:
+            # Get top diagnoses from database
+            top_diagnoses = self.practice_analytics.get_top_diagnoses(5)
 
-        for review in self.reviews:
-            # Sentiment color
-            sentiment_color = ft.colors.GREEN_600 if review["sentiment"] == "positive" else ft.colors.ORANGE_600 if review["sentiment"] == "neutral" else ft.colors.RED_600
-
-            # Stars
-            stars = [
-                ft.Icon(
-                    ft.icons.STAR if i < review["rating"] else ft.icons.STAR_BORDER,
-                    color=ft.colors.AMBER_600,
-                    size=16,
-                )
-                for i in range(5)
-            ]
-
-            days_ago = (datetime.now() - review["date"]).days
-            time_text = "Today" if days_ago == 0 else "Yesterday" if days_ago == 1 else f"{days_ago} days ago"
-
-            review_items.append(
-                ft.Container(
+            if not top_diagnoses:
+                return ft.Container(
                     content=ft.Column(
                         controls=[
-                            ft.Row(
-                                controls=[
-                                    ft.Text(review["patient"], size=13, weight=ft.FontWeight.BOLD),
-                                    ft.Container(expand=True),
-                                    ft.Text(time_text, size=11, color=ft.colors.GREY_600),
-                                ],
-                            ),
-                            ft.Row(controls=stars, spacing=2),
-                            ft.Text(
-                                review["comment"],
-                                size=12,
-                                color=ft.colors.GREY_700,
-                                italic=True,
-                            ),
+                            ft.Text("Top Diagnoses", size=18, weight=ft.FontWeight.BOLD),
+                            ft.Text("No diagnosis data available yet", color=ft.colors.GREY_600, size=13),
                         ],
-                        spacing=6,
-                    ),
-                    padding=12,
-                    border=ft.border.all(1, ft.colors.with_opacity(0.3, sentiment_color)),
-                    border_radius=8,
-                    bgcolor=ft.colors.with_opacity(0.05, sentiment_color),
-                )
-            )
-
-        return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Text("Recent Reviews", size=18, weight=ft.FontWeight.BOLD),
-                    ft.Column(
-                        controls=review_items,
                         spacing=10,
                     ),
-                ],
-                spacing=15,
-            ),
-            padding=20,
-            border=ft.border.all(1, ft.colors.GREY_300),
-            border_radius=12,
-            bgcolor=ft.colors.WHITE,
-        )
+                    padding=20,
+                    border=ft.border.all(1, ft.colors.GREY_300),
+                    border_radius=12,
+                    bgcolor=ft.colors.WHITE,
+                )
+
+            # Convert to chart data
+            chart_data = [
+                {"label": diagnosis[:20], "value": count}
+                for diagnosis, count in top_diagnoses
+            ]
+
+            return ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Top Diagnoses", size=18, weight=ft.FontWeight.BOLD),
+                        BarChart(data=chart_data, color=ft.colors.PURPLE_400, height=150),
+                    ],
+                    spacing=15,
+                ),
+                padding=20,
+                border=ft.border.all(1, ft.colors.GREY_300),
+                border_radius=12,
+                bgcolor=ft.colors.WHITE,
+            )
+        except Exception as e:
+            return ft.Container(
+                content=ft.Text(f"Error loading diagnoses: {str(e)}", color=ft.colors.RED_600),
+                padding=20,
+            )
 
     def _build_recommendations_section(self) -> ft.Container:
         """Actionable recommendations."""
@@ -623,7 +690,7 @@ class GrowthDashboard(ft.UserControl):
                         ],
                     ),
                     ft.Divider(height=20),
-                    # Patient sources and reviews
+                    # Patient sources and top diagnoses
                     ft.ResponsiveRow(
                         controls=[
                             ft.Container(
@@ -631,7 +698,7 @@ class GrowthDashboard(ft.UserControl):
                                 col={"sm": 12, "lg": 6},
                             ),
                             ft.Container(
-                                content=self._build_reviews_section(),
+                                content=self._build_top_diagnoses(),
                                 col={"sm": 12, "lg": 6},
                             ),
                         ],

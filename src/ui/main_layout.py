@@ -213,6 +213,7 @@ class MainLayout(ft.UserControl):
 
         # Growth dashboard
         self.growth_dashboard = GrowthDashboard(
+            db_service=self.db,
             on_action_click=self._on_growth_action,
         )
 

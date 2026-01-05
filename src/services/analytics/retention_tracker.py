@@ -259,16 +259,89 @@ class RetentionTracker:
 
         return opportunities[:30]
 
+    def get_returning_patients(self) -> int:
+        """Get count of patients with more than one visit."""
+        return self.db.get_returning_patients() if self.db else 0
+
+    def get_follow_up_compliance(self) -> float:
+        """Get follow-up compliance rate."""
+        # Follow-up tracking not fully implemented yet
+        # Return a placeholder based on visits
+        if not self.db:
+            return 0.0
+
+        follow_up_metrics = self.get_follow_up_metrics()
+        return follow_up_metrics.compliance_rate
+
+    def get_patient_churn(self, days: int = 180) -> List[Dict]:
+        """Get patients not seen in specified days."""
+        if not self.db:
+            return []
+
+        cutoff_date = date.today() - timedelta(days=days)
+        all_patients = self.db.get_patient_visit_counts()
+
+        churned = []
+        for patient in all_patients:
+            last_visit = patient.get('last_visit_date')
+            visit_count = patient.get('visit_count', 0)
+
+            # Only consider patients who have visited before
+            if visit_count > 0 and last_visit:
+                # Parse date if it's a string
+                if isinstance(last_visit, str):
+                    try:
+                        last_visit = datetime.strptime(last_visit, '%Y-%m-%d').date()
+                    except:
+                        continue
+
+                if last_visit < cutoff_date:
+                    churned.append({
+                        'patient_id': patient.get('id'),
+                        'name': patient.get('name'),
+                        'phone': patient.get('phone'),
+                        'last_visit': last_visit,
+                        'days_since_visit': (date.today() - last_visit).days,
+                        'visit_count': visit_count,
+                    })
+
+        return churned
+
     def _get_all_patients(self, as_of_date: date) -> List[Dict]:
         """Get all patients as of a date."""
-        if self.db:
-            return self.db.get_all_patients_with_stats(as_of_date)
-        return []
+        if not self.db:
+            return []
+
+        # Use the existing method from database
+        patients_stats = self.db.get_all_patients_with_stats(as_of_date)
+
+        # Convert to expected format
+        result = []
+        for p in patients_stats:
+            last_visit = p.get('last_visit_date')
+            if isinstance(last_visit, str) and last_visit:
+                try:
+                    last_visit = datetime.strptime(last_visit, '%Y-%m-%d').date()
+                except:
+                    last_visit = None
+
+            result.append({
+                'id': p.get('id'),
+                'name': p.get('name'),
+                'phone': p.get('phone'),
+                'created_at': p.get('created_at'),
+                'visit_count': p.get('visit_count', 0),
+                'last_visit_date': last_visit,
+                'conditions': p.get('conditions', '').split(',') if p.get('conditions') else [],
+                'missed_followups': 0,  # Not tracked yet
+            })
+
+        return result
 
     def _get_visits_with_followup(self, start: date, end: date) -> List[Dict]:
         """Get visits that had follow-up scheduled."""
-        if self.db:
-            return self.db.get_visits_with_followup(start, end)
+        # Follow-up tracking not fully implemented yet
+        # For now, return empty list
         return []
 
     def _get_winback_action(self, patient: Dict) -> str:

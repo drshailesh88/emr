@@ -437,3 +437,201 @@ class DatabaseService:
             except (ValueError, TypeError):
                 # If we can't parse the timestamp, assume there are changes
                 return True
+
+    # ============== ANALYTICS QUERIES ==============
+
+    def get_total_patients(self) -> int:
+        """Get total count of patients."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM patients")
+            return cursor.fetchone()[0]
+
+    def get_patients_this_month(self) -> int:
+        """Get count of new patients this month."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM patients
+                WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+            """)
+            return cursor.fetchone()[0]
+
+    def get_visits_today(self) -> int:
+        """Get count of visits today."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM visits
+                WHERE DATE(visit_date) = DATE('now')
+            """)
+            return cursor.fetchone()[0]
+
+    def get_visits_this_week(self) -> int:
+        """Get count of visits in the last 7 days."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM visits
+                WHERE visit_date >= DATE('now', '-7 days')
+            """)
+            return cursor.fetchone()[0]
+
+    def get_visits_by_date(self, target_date: date) -> List[dict]:
+        """Get all visits for a specific date."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT v.*, p.name as patient_name, p.phone
+                FROM visits v
+                LEFT JOIN patients p ON v.patient_id = p.id
+                WHERE DATE(v.visit_date) = ?
+                ORDER BY v.created_at
+            """, (target_date,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_visits_by_date_range(self, start_date: date, end_date: date) -> List[dict]:
+        """Get all visits in a date range."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT v.*, p.name as patient_name, p.phone
+                FROM visits v
+                LEFT JOIN patients p ON v.patient_id = p.id
+                WHERE DATE(v.visit_date) BETWEEN ? AND ?
+                ORDER BY v.visit_date
+            """, (start_date, end_date))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_top_diagnoses(self, limit: int = 10) -> List[Tuple[str, int]]:
+        """Get most common diagnoses."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT diagnosis, COUNT(*) as count
+                FROM visits
+                WHERE diagnosis IS NOT NULL AND diagnosis != ''
+                GROUP BY diagnosis
+                ORDER BY count DESC
+                LIMIT ?
+            """, (limit,))
+            return [(row[0], row[1]) for row in cursor.fetchall()]
+
+    def get_patient_demographics(self) -> dict:
+        """Get patient demographics (age and gender distribution)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Gender distribution
+            cursor.execute("""
+                SELECT gender, COUNT(*) as count
+                FROM patients
+                WHERE gender IS NOT NULL
+                GROUP BY gender
+            """)
+            gender_dist = {row[0]: row[1] for row in cursor.fetchall()}
+
+            # Age distribution (age groups)
+            cursor.execute("""
+                SELECT
+                    CASE
+                        WHEN age < 18 THEN '0-17'
+                        WHEN age BETWEEN 18 AND 30 THEN '18-30'
+                        WHEN age BETWEEN 31 AND 45 THEN '31-45'
+                        WHEN age BETWEEN 46 AND 60 THEN '46-60'
+                        ELSE '60+'
+                    END as age_group,
+                    COUNT(*) as count
+                FROM patients
+                WHERE age IS NOT NULL
+                GROUP BY age_group
+                ORDER BY age_group
+            """)
+            age_dist = {row[0]: row[1] for row in cursor.fetchall()}
+
+            return {
+                "gender": gender_dist,
+                "age_groups": age_dist
+            }
+
+    def get_new_patients_by_month(self, months: int = 12) -> List[Tuple[str, int]]:
+        """Get new patients grouped by month."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count
+                FROM patients
+                WHERE created_at >= DATE('now', ? || ' months')
+                GROUP BY month
+                ORDER BY month DESC
+            """, (f'-{months}',))
+            return [(row[0], row[1]) for row in cursor.fetchall()]
+
+    def get_patient_visit_counts(self) -> List[dict]:
+        """Get all patients with their visit counts."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT
+                    p.id,
+                    p.name,
+                    p.phone,
+                    p.created_at,
+                    COUNT(v.id) as visit_count,
+                    MAX(v.visit_date) as last_visit_date
+                FROM patients p
+                LEFT JOIN visits v ON p.id = v.patient_id
+                GROUP BY p.id
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_returning_patients(self) -> int:
+        """Get count of patients with more than one visit."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(DISTINCT patient_id) FROM (
+                    SELECT patient_id, COUNT(*) as visit_count
+                    FROM visits
+                    GROUP BY patient_id
+                    HAVING visit_count > 1
+                )
+            """)
+            return cursor.fetchone()[0]
+
+    def get_visits_by_hour(self) -> dict:
+        """Get visit distribution by hour of day."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # Since we don't have time in visit_date, estimate based on creation time
+            cursor.execute("""
+                SELECT strftime('%H', created_at) as hour, COUNT(*) as count
+                FROM visits
+                WHERE created_at IS NOT NULL
+                GROUP BY hour
+                ORDER BY hour
+            """)
+            return {int(row[0]): row[1] for row in cursor.fetchall()}
+
+    def get_all_patients_with_stats(self, as_of_date: date = None) -> List[dict]:
+        """Get all patients with computed statistics."""
+        if as_of_date is None:
+            as_of_date = date.today()
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT
+                    p.id,
+                    p.name,
+                    p.phone,
+                    p.created_at,
+                    COUNT(v.id) as visit_count,
+                    MAX(v.visit_date) as last_visit_date,
+                    GROUP_CONCAT(DISTINCT v.diagnosis) as conditions
+                FROM patients p
+                LEFT JOIN visits v ON p.id = v.patient_id
+                WHERE DATE(p.created_at) <= ?
+                GROUP BY p.id
+            """, (as_of_date,))
+            return [dict(row) for row in cursor.fetchall()]

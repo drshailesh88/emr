@@ -91,6 +91,66 @@ class DifferentialEngine:
             "anemia": 0.535,  # 53.5% (iron deficiency very common)
             "vitamin_d_deficiency": 0.7,  # 70% (extremely common)
             "dyslipidemia": 0.25,  # 25%
+
+            # Pediatric conditions
+            "meningitis": 0.00003,  # 3 per 100k (higher in children)
+            "croup": 0.00050,  # 50 per 100k
+            "epiglottitis": 0.000005,  # 0.5 per 100k (rare, Hib vaccine)
+            "febrile_seizure": 0.00020,  # 20 per 100k
+            "intussusception": 0.00010,  # 10 per 100k
+            "otitis_media": 0.02,  # 2% (very common in children)
+            "foreign_body_aspiration": 0.00005,  # 5 per 100k
+            "sepsis": 0.00015,  # 15 per 100k
+            "cholera": 0.00002,  # 2 per 100k (endemic areas)
+            "dehydration": 0.01,  # 1%
+
+            # Obstetric conditions
+            "preeclampsia": 0.00050,  # 50 per 100k pregnancies (~3-5% of pregnancies)
+            "eclampsia": 0.00010,  # 10 per 100k pregnancies
+            "ectopic_pregnancy": 0.00020,  # 20 per 100k women of reproductive age
+            "threatened_abortion": 0.00100,  # 100 per 100k
+            "placenta_previa": 0.00050,  # 50 per 100k pregnancies
+            "placental_abruption": 0.00030,  # 30 per 100k pregnancies
+            "hellp_syndrome": 0.00015,  # 15 per 100k pregnancies
+            "premature_rupture_of_membranes": 0.00080,  # 80 per 100k pregnancies
+            "labor": 0.00200,  # 200 per 100k (active labor)
+            "preterm_labor": 0.00100,  # 100 per 100k
+            "fetal_distress": 0.00050,  # 50 per 100k
+
+            # Psychiatric conditions
+            "major_depression": 0.042,  # 4.2%
+            "bipolar_disorder": 0.010,  # 1.0%
+            "schizophrenia": 0.003,  # 0.3%
+            "generalized_anxiety_disorder": 0.031,  # 3.1%
+            "panic_disorder": 0.023,  # 2.3%
+            "borderline_personality_disorder": 0.016,  # 1.6%
+            "delirium": 0.00050,  # 50 per 100k
+            "dementia": 0.018,  # 1.8% (increases with age)
+
+            # Ophthalmologic conditions
+            "acute_angle_closure_glaucoma": 0.00005,  # 5 per 100k
+            "retinal_detachment": 0.00010,  # 10 per 100k
+            "central_retinal_artery_occlusion": 0.000005,  # 0.5 per 100k
+            "conjunctivitis": 0.01,  # 1%
+            "uveitis": 0.00020,  # 20 per 100k
+            "scleritis": 0.00005,  # 5 per 100k
+            "corneal_ulcer": 0.00015,  # 15 per 100k
+
+            # Dermatologic conditions
+            "urticaria": 0.01,  # 1%
+            "atopic_dermatitis": 0.015,  # 1.5%
+            "scabies": 0.005,  # 0.5%
+            "herpes_zoster": 0.003,  # 0.3%
+            "alopecia_areata": 0.002,  # 0.2%
+
+            # Urologic conditions
+            "kidney_stones": 0.007,  # 0.7%
+            "pyelonephritis": 0.002,  # 0.2%
+            "benign_prostatic_hyperplasia": 0.08,  # 8% (men >50)
+            "prostatitis": 0.005,  # 0.5%
+            "testicular_torsion": 0.000025,  # 2.5 per 100k
+            "epididymitis": 0.00060,  # 60 per 100k
+            "urethritis": 0.008,  # 0.8%
         }
 
     def _load_symptom_likelihood_ratios(self) -> None:
@@ -258,6 +318,238 @@ class DifferentialEngine:
                 "hypothyroidism": 10.0,
                 "type_2_diabetes": 5.0,
                 "vitamin_d_deficiency": 4.0,
+            },
+
+            # PEDIATRIC SYMPTOMS
+            "crying_excessively": {
+                "meningitis": 12.0,
+                "intussusception": 10.0,
+                "otitis_media": 8.0,
+                "colic": 6.0,
+            },
+            "not_feeding": {
+                "meningitis": 15.0,
+                "sepsis": 12.0,
+                "pneumonia": 8.0,
+                "gastroenteritis": 7.0,
+            },
+            "lethargy_child": {
+                "meningitis": 20.0,
+                "sepsis": 18.0,
+                "hypoglycemia": 12.0,
+                "dehydration": 8.0,
+            },
+            "bulging_fontanelle": {
+                "meningitis": 25.0,
+                "hydrocephalus": 15.0,
+            },
+            "stridor": {
+                "croup": 15.0,
+                "epiglottitis": 20.0,
+                "foreign_body_aspiration": 12.0,
+            },
+            "barking_cough": {
+                "croup": 20.0,
+            },
+            "drooling": {
+                "epiglottitis": 25.0,
+                "peritonsillar_abscess": 12.0,
+            },
+            "dehydration_signs": {
+                "gastroenteritis": 15.0,
+                "cholera": 12.0,
+                "diabetic_ketoacidosis": 10.0,
+            },
+            "seizure_child": {
+                "febrile_seizure": 10.0,
+                "meningitis": 15.0,
+                "epilepsy": 12.0,
+                "hypoglycemia": 8.0,
+            },
+            "febrile_convulsion": {
+                "febrile_seizure": 20.0,
+                "meningitis": 10.0,
+            },
+
+            # OBSTETRIC SYMPTOMS
+            "vaginal_bleeding": {
+                "threatened_abortion": 12.0,
+                "ectopic_pregnancy": 15.0,
+                "placenta_previa": 10.0,
+                "placental_abruption": 12.0,
+            },
+            "leaking_pv": {
+                "premature_rupture_of_membranes": 20.0,
+                "labor": 15.0,
+            },
+            "decreased_fetal_movements": {
+                "fetal_distress": 15.0,
+                "placental_insufficiency": 10.0,
+            },
+            "contractions": {
+                "labor": 20.0,
+                "preterm_labor": 12.0,
+                "braxton_hicks": 5.0,
+            },
+            "headache_with_high_bp": {
+                "preeclampsia": 20.0,
+                "eclampsia": 15.0,
+                "chronic_hypertension": 8.0,
+            },
+            "visual_disturbances": {
+                "preeclampsia": 18.0,
+                "eclampsia": 20.0,
+                "migraine": 8.0,
+            },
+            "swelling_feet_face": {
+                "preeclampsia": 12.0,
+                "normal_pregnancy_edema": 6.0,
+                "nephrotic_syndrome": 10.0,
+            },
+            "epigastric_pain_pregnancy": {
+                "preeclampsia": 15.0,
+                "hellp_syndrome": 18.0,
+            },
+
+            # PSYCHIATRIC SYMPTOMS
+            "suicidal_ideation": {
+                "major_depression": 20.0,
+                "bipolar_disorder": 12.0,
+                "schizophrenia": 10.0,
+            },
+            "self_harm": {
+                "borderline_personality_disorder": 15.0,
+                "major_depression": 12.0,
+            },
+            "hearing_voices": {
+                "schizophrenia": 25.0,
+                "bipolar_disorder_psychotic": 15.0,
+                "psychotic_depression": 12.0,
+            },
+            "seeing_things": {
+                "schizophrenia": 20.0,
+                "delirium": 15.0,
+                "substance_withdrawal": 10.0,
+            },
+            "insomnia": {
+                "anxiety_disorder": 8.0,
+                "major_depression": 10.0,
+                "hyperthyroidism": 6.0,
+            },
+            "racing_thoughts": {
+                "bipolar_disorder_manic": 20.0,
+                "anxiety_disorder": 10.0,
+                "adhd": 8.0,
+            },
+            "excessive_worry": {
+                "generalized_anxiety_disorder": 18.0,
+                "panic_disorder": 12.0,
+                "major_depression": 8.0,
+            },
+            "panic_attacks": {
+                "panic_disorder": 25.0,
+                "generalized_anxiety_disorder": 12.0,
+                "hyperthyroidism": 6.0,
+            },
+            "memory_problems": {
+                "dementia": 20.0,
+                "depression": 8.0,
+                "hypothyroidism": 6.0,
+                "vitamin_b12_deficiency": 8.0,
+            },
+            "confusion": {
+                "delirium": 20.0,
+                "dementia": 12.0,
+                "hypoglycemia": 15.0,
+                "stroke": 10.0,
+            },
+
+            # OPHTHALMOLOGIC SYMPTOMS
+            "sudden_vision_loss": {
+                "retinal_detachment": 20.0,
+                "central_retinal_artery_occlusion": 18.0,
+                "acute_angle_closure_glaucoma": 15.0,
+                "stroke": 12.0,
+            },
+            "floaters": {
+                "retinal_detachment": 15.0,
+                "posterior_vitreous_detachment": 10.0,
+                "vitreous_hemorrhage": 12.0,
+            },
+            "red_eye": {
+                "conjunctivitis": 12.0,
+                "acute_angle_closure_glaucoma": 15.0,
+                "uveitis": 10.0,
+                "scleritis": 8.0,
+            },
+            "photophobia": {
+                "acute_angle_closure_glaucoma": 18.0,
+                "uveitis": 15.0,
+                "meningitis": 12.0,
+                "migraine": 8.0,
+            },
+            "eye_pain": {
+                "acute_angle_closure_glaucoma": 20.0,
+                "uveitis": 12.0,
+                "scleritis": 10.0,
+                "corneal_ulcer": 15.0,
+            },
+            "double_vision": {
+                "stroke": 15.0,
+                "myasthenia_gravis": 12.0,
+                "third_nerve_palsy": 18.0,
+            },
+
+            # DERMATOLOGIC SYMPTOMS
+            "itching": {
+                "urticaria": 10.0,
+                "atopic_dermatitis": 12.0,
+                "scabies": 15.0,
+                "cholestatic_liver_disease": 8.0,
+            },
+            "rash": {
+                "viral_exanthem": 8.0,
+                "drug_reaction": 10.0,
+                "allergic_reaction": 12.0,
+            },
+            "blisters": {
+                "herpes_zoster": 15.0,
+                "pemphigus": 12.0,
+                "bullous_pemphigoid": 10.0,
+                "stevens_johnson_syndrome": 18.0,
+            },
+            "hair_loss": {
+                "alopecia_areata": 12.0,
+                "telogen_effluvium": 10.0,
+                "hypothyroidism": 8.0,
+            },
+
+            # UROLOGIC SYMPTOMS
+            "burning_urination": {
+                "urinary_tract_infection": 20.0,
+                "urethritis": 15.0,
+                "prostatitis": 10.0,
+            },
+            "blood_in_urine": {
+                "urinary_tract_infection": 12.0,
+                "kidney_stones": 15.0,
+                "bladder_cancer": 10.0,
+                "glomerulonephritis": 12.0,
+            },
+            "urinary_retention": {
+                "benign_prostatic_hyperplasia": 15.0,
+                "urethral_stricture": 12.0,
+                "neurogenic_bladder": 10.0,
+            },
+            "flank_pain": {
+                "kidney_stones": 20.0,
+                "pyelonephritis": 15.0,
+                "renal_infarction": 10.0,
+            },
+            "testicular_pain": {
+                "testicular_torsion": 25.0,
+                "epididymitis": 15.0,
+                "orchitis": 10.0,
             },
         }
 

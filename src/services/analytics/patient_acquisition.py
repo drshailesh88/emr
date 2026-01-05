@@ -1,6 +1,6 @@
 """Track patient acquisition sources and growth."""
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import date, timedelta
 from enum import Enum
 
@@ -203,23 +203,84 @@ class PatientAcquisition:
         # For now, just log the action
         return True
 
+    def get_new_patients_by_month(self, months: int = 12) -> List[Tuple[str, int]]:
+        """Get new patients grouped by month."""
+        return self.db.get_new_patients_by_month(months) if self.db else []
+
+    def get_growth_rate(self) -> float:
+        """Calculate patient growth rate (this month vs last month)."""
+        if not self.db:
+            return 0.0
+
+        # Get this month's count
+        this_month = self.db.get_patients_this_month()
+
+        # Get last month's count
+        today = date.today()
+        if today.month > 1:
+            last_month_year = today.year
+            last_month_month = today.month - 1
+        else:
+            last_month_year = today.year - 1
+            last_month_month = 12
+
+        last_month_start = date(last_month_year, last_month_month, 1)
+        # Get last day of last month
+        if last_month_month == 12:
+            last_month_end = date(last_month_year, 12, 31)
+        else:
+            last_month_end = date(last_month_year, last_month_month + 1, 1) - timedelta(days=1)
+
+        # Count patients created in last month
+        all_patients = self.db.get_all_patients()
+        last_month = sum(1 for p in all_patients
+                        if p.created_at and
+                        last_month_start <= p.created_at.date() <= last_month_end)
+
+        if last_month == 0:
+            return 100.0 if this_month > 0 else 0.0
+
+        return round(((this_month - last_month) / last_month) * 100, 1)
+
     def _get_new_patients(self, start: date, end: date) -> List[Dict]:
         """Get new patients in date range."""
-        if self.db:
-            return self.db.get_new_patients_by_date_range(start, end)
-        return []
+        if not self.db:
+            return []
+
+        # Get all patients and filter by created_at date
+        all_patients = self.db.get_all_patients()
+        return [
+            {
+                'id': p.id,
+                'name': p.name,
+                'phone': p.phone,
+                'created_at': p.created_at,
+                'acquisition_source': 'walk_in',  # Default, as we don't track this yet
+            }
+            for p in all_patients
+            if p.created_at and start <= p.created_at.date() <= end
+        ]
 
     def _get_referrals(self, start: date, end: date) -> List[Dict]:
         """Get referral records in date range."""
-        if self.db:
-            return self.db.get_referrals_by_date_range(start, end)
+        # Referral tracking not yet implemented
+        # For now, return empty list
         return []
 
     def _get_patients_by_source(self, source: str, start: date, end: date) -> List[Dict]:
         """Get patients acquired from a specific source."""
+        # Source tracking not yet implemented
+        # Return all new patients for now
+        patients = self._get_new_patients(start, end)
+
+        # Get visit counts for each patient
         if self.db:
-            return self.db.get_patients_by_acquisition_source(source, start, end)
-        return []
+            for patient in patients:
+                visits = self.db.get_patient_visits(patient['id'])
+                patient['visit_count'] = len(visits)
+                patient['total_revenue'] = 0  # Revenue tracking not yet implemented
+
+        return patients
 
     def _calculate_acquisition_costs(
         self,

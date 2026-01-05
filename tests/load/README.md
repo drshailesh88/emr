@@ -1,18 +1,51 @@
-# Load Testing Suite - DocAssist EMR
+# DocAssist EMR - Load Testing Suite
 
-Comprehensive load and performance testing suite for DocAssist EMR.
+Comprehensive load testing suite for DocAssist EMR, covering database performance, concurrency, memory usage, and scalability from 100 to 50,000+ patients.
 
 ## Overview
 
-This suite tests the application's performance under realistic load conditions with:
-- 10,000 patient database
-- Concurrent user scenarios
-- Memory profiling
-- Performance benchmarking
+The load testing suite validates that DocAssist EMR can:
+
+- **Handle scale:** Support databases with 10K+ patients and 100K+ visits
+- **Maintain performance:** Search and retrieval operations remain fast at scale
+- **Support concurrency:** Multiple doctors using the system simultaneously
+- **Manage memory:** No memory leaks during extended use
+- **Start quickly:** Application startup under 5 seconds even with large databases
+
+### Quick Start
+
+```bash
+# Run all tests (fast - skips 50K tests)
+python tests/load/run_benchmarks.py
+
+# Run with regression detection
+python tests/load/run_benchmarks.py --save-baseline
+
+# Run specific test suite
+python tests/load/run_benchmarks.py --suite startup
+```
 
 ## Test Suites
 
-### 1. Database Performance (`test_database_performance.py`)
+### 1. Startup Time (`test_startup_time.py`) **NEW**
+Tests application startup performance at different scales:
+- Cold start with empty database (<2s)
+- Startup with 100 patients (<2s)
+- Startup with 1,000 patients (<3s)
+- Startup with 10,000 patients (<5s)
+- Index creation time
+- Connection pool overhead
+
+### 2. Database Scale (`test_database_scale.py`) **NEW**
+Comprehensive scale testing at 1K, 10K, and 50K patient levels:
+- Patient search at each scale
+- Visit retrieval at each scale
+- Complex analytical queries
+- Pagination performance
+- Scale comparison (degradation analysis)
+- Write performance on large databases
+
+### 3. Database Performance (`test_database_performance.py`)
 Tests database operations with 10K patients:
 - Patient search (target: <100ms)
 - Pagination (target: <50ms)
@@ -20,35 +53,35 @@ Tests database operations with 10K patients:
 - Concurrent writes
 - Bulk imports
 
-### 2. Search Performance (`test_search_performance.py`)
+### 4. Search Performance (`test_search_performance.py`)
 Tests various search operations:
 - Phonetic search (target: <200ms)
 - Fuzzy search with typos (target: <300ms)
 - Natural language search (target: <500ms)
 - Filtered search (target: <200ms)
 
-### 3. Report Generation (`test_report_generation.py`)
+### 5. Report Generation (`test_report_generation.py`)
 Tests report generation:
 - Daily summary (target: <1s)
 - Monthly analytics (target: <5s)
 - Audit trail export (target: <10s)
 - PDF prescription generation (target: <1s)
 
-### 4. Concurrent Users (`test_concurrent_users.py`)
+### 6. Concurrent Users (`test_concurrent_users.py`)
 Simulates realistic multi-user scenarios:
 - 5 doctors consulting simultaneously
 - 10 concurrent searches
 - Mixed workload (doctors + staff + admin)
 - Burst load (50 requests in 1 second)
 
-### 5. Memory Usage (`test_memory_usage.py`)
+### 7. Memory Usage (`test_memory_usage.py`)
 Memory profiling and leak detection:
 - App baseline (target: <100MB)
 - With 10K patients (target: <500MB)
 - Memory leak detection
 - Large patient timeline
 
-### 6. LLM Performance (`test_llm_performance.py`)
+### 8. LLM Performance (`test_llm_performance.py`)
 LLM operation performance (mocked):
 - SOAP extraction (target: <3s)
 - Differential diagnosis (target: <2s)
@@ -57,30 +90,57 @@ LLM operation performance (mocked):
 
 ## Running Tests
 
-### Run All Load Tests
+### Using run_benchmarks.py (Recommended - NEW)
+
+```bash
+# Run all tests (skips slow 50K tests)
+python tests/load/run_benchmarks.py
+
+# Run with regression detection
+python tests/load/run_benchmarks.py --save-baseline
+
+# Include slow tests (50K+ patients)
+python tests/load/run_benchmarks.py --include-slow
+
+# Run specific suite
+python tests/load/run_benchmarks.py --suite startup
+python tests/load/run_benchmarks.py --suite scale
+python tests/load/run_benchmarks.py --suite memory
+
+# Custom output directory
+python tests/load/run_benchmarks.py --output-dir my_results/
+```
+
+**Features:**
+- Baseline comparison and regression detection
+- Comprehensive markdown and JSON reports
+- Performance degradation analysis
+- Automatic pass/fail with ±20% thresholds
+
+### Using run_load_tests.py (Original)
+
 ```bash
 # From project root
 python tests/load/run_load_tests.py
 
-# Or using the script directly
-./tests/load/run_load_tests.py
-```
-
-### Run Specific Test Suite
-```bash
-# Run only database performance tests
-pytest tests/load/test_database_performance.py -v -s
-
-# Run only memory tests
-pytest tests/load/test_memory_usage.py -v -s
-
-# Using the runner
+# Run specific suite
 ./tests/load/run_load_tests.py --suite database_performance
+
+# Custom output directory
+./tests/load/run_load_tests.py --output-dir ./my_results
 ```
 
-### Run With Custom Output Directory
+### Using pytest Directly
+
 ```bash
-./tests/load/run_load_tests.py --output-dir ./my_results
+# Run single test file
+pytest tests/load/test_startup_time.py -v -s
+
+# Run specific test
+pytest tests/load/test_startup_time.py::TestStartupTime::test_cold_start_empty_db -v -s
+
+# Skip slow tests
+pytest tests/load/test_database_scale.py -v -s -m "not slow"
 ```
 
 ## Test Fixtures
@@ -149,6 +209,46 @@ rx_json = generate_prescription_json(
 # Generate chronic prescription
 rx = generate_chronic_prescription('Hypertension')
 ```
+
+### Unified Data Generator (`data_generator.py`) **NEW**
+Convenient interface to all generators with database integration:
+
+```python
+from tests.load.data_generator import DataGenerator, quick_populate
+
+# Quick database population
+db = DatabaseService('test.db')
+generator = DataGenerator(db)
+
+# Presets for different scales
+generator.populate_small_database()      # 100 patients
+generator.populate_medium_database()     # 1,000 patients
+generator.populate_large_database()      # 10,000 patients
+generator.populate_heavy_patient_database()  # 20 patients with 50-100 visits each
+
+# Custom generation
+generator.generate_and_save_patients(
+    count=500,
+    with_visits=True,
+    visits_per_patient=(5, 15)
+)
+
+# Generate chronic disease cohort
+generator.generate_chronic_disease_cohort(
+    condition='Type 2 Diabetes Mellitus',
+    patient_count=50
+)
+
+# Quick populate shortcut
+quick_populate(db, scale='medium')  # 1,000 patients
+```
+
+**Features:**
+- One-line database population
+- Realistic Indian patient data
+- Chronic disease cohorts
+- Recent activity generation
+- Automatic visit and prescription generation
 
 ## Benchmarks
 

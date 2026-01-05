@@ -19,6 +19,8 @@ from ..services.reference_ranges import TREND_PANELS, get_reference_range
 from ..services.trend_calculator import calculate_trend, prepare_chart_data
 from .flowsheet_panel import ConditionManager
 from .whatsapp_share_dialog import show_whatsapp_share
+from .whatsapp.send_message_dialog import show_send_message_dialog
+from ..services.whatsapp_settings import WhatsAppSettingsService
 from .appointment_panel import show_schedule_followup
 from .components.voice_input import VoiceInputButton
 from ..services.voice import is_voice_available
@@ -1777,13 +1779,14 @@ class CentralPanel:
         # Get PDF path if available
         pdf_path = getattr(self, '_last_pdf_path', None)
 
-        # Show share dialog
-        show_whatsapp_share(
+        # Show comprehensive send message dialog
+        show_send_message_dialog(
             page=e.page,
             patient=self.current_patient,
+            settings_service=WhatsAppSettingsService(),
+            on_sent=lambda: self._show_snackbar("Message sent via WhatsApp"),
             prescription=self.current_prescription,
-            pdf_path=pdf_path,
-            on_shared=lambda: self._show_snackbar("Prescription shared via WhatsApp")
+            pdf_path=pdf_path
         )
 
     def _on_voice_text(self, text: str):
