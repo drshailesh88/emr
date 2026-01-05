@@ -4,6 +4,7 @@ import flet as ft
 from typing import Callable, Optional, List
 import json
 from datetime import date
+import threading
 
 from ..models.schemas import Patient, Visit, Prescription, Medication, Investigation, Procedure
 from ..services.llm import LLMService
@@ -22,6 +23,14 @@ from .appointment_panel import show_schedule_followup
 from .components.voice_input import VoiceInputButton
 from ..services.voice import is_voice_available
 from .reminder_dialog import show_reminder_settings
+from ..services.diagnosis.differential_engine import DifferentialEngine
+from ..services.diagnosis.red_flag_detector import RedFlagDetector
+from ..services.diagnosis.symptom_parser import parse_symptoms, extract_vitals_from_notes
+from .components.differential_panel import DifferentialPanel
+from .components.red_flag_banner import RedFlagBanner
+from .components.extracted_summary import ExtractedSummaryPanel, ExtractedData, ExtractionLoadingIndicator
+from .components.entity_highlight import EntitySpan
+from ..services.clinical_nlp.note_extractor import ClinicalNoteExtractor
 
 
 class CentralPanel:
@@ -47,6 +56,19 @@ class CentralPanel:
         self.investigations: List[Investigation] = []
         self.procedures: List[Procedure] = []
         self.editing_visit_id: Optional[int] = None  # Track if editing existing visit
+
+        # Differential diagnosis engine and detector
+        self.differential_engine = DifferentialEngine()
+        self.red_flag_detector = RedFlagDetector()
+
+        # Clinical NLP extractor
+        self.note_extractor = ClinicalNoteExtractor(llm_service=llm)
+
+        # Debounce timer for updating differentials
+        self._update_timer: Optional[threading.Timer] = None
+
+        # Debounce timer for entity extraction
+        self._extraction_timer: Optional[threading.Timer] = None
 
         # UI components
         self.patient_header: Optional[ft.Container] = None
@@ -84,6 +106,14 @@ class CentralPanel:
 
         # Template browser
         self.template_browser = TemplateBrowser(db, self._on_template_applied)
+
+        # Differential panel and red flag banner
+        self.differential_panel: Optional[DifferentialPanel] = None
+
+        # Entity extraction components
+        self.extracted_summary_panel: Optional[ExtractedSummaryPanel] = None
+        self.extraction_loading: Optional[ExtractionLoadingIndicator] = None
+        self.red_flag_banner: Optional[RedFlagBanner] = None
 
     def build(self) -> ft.Control:
         """Build the central panel UI."""
@@ -124,6 +154,7 @@ class CentralPanel:
             max_lines=12,
             border_radius=8,
             text_size=13,
+            on_change=self._on_notes_change,
         )
 
         # Voice input button for notes
@@ -133,13 +164,21 @@ class CentralPanel:
             tooltip="Voice dictation - click to start/stop"
         )
 
-        # Notes field with voice button
+        # Differential diagnosis panel
+        self.differential_panel = DifferentialPanel()
+
+        # Notes field with voice button and differential panel
         self.notes_container = ft.Row([
             ft.Container(content=self.notes_field, expand=True),
             ft.Container(
                 content=self.voice_btn,
                 alignment=ft.alignment.top_center,
                 padding=ft.padding.only(top=5),
+            ),
+            ft.Container(
+                content=self.differential_panel,
+                width=300,
+                alignment=ft.alignment.top_left,
             ),
         ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.START)
 
@@ -219,12 +258,28 @@ class CentralPanel:
             disabled=True,
         )
 
+        # Entity extraction components
+        self.extraction_loading = ExtractionLoadingIndicator(visible=False)
+        self.extracted_summary_panel = ExtractedSummaryPanel(
+            extracted_data=ExtractedData(),
+            on_correction=self._on_entity_correction,
+            visible=False,
+        )
+
+        # Red flag banner
+        self.red_flag_banner = RedFlagBanner(
+            on_acknowledged=self._on_red_flag_acknowledged
+        )
+
         # Prescription tab content
         rx_tab_content = ft.Container(
             content=ft.Column([
+                self.red_flag_banner,
                 self.vitals_section,
                 self.complaint_field,
                 self.notes_container,
+                self.extraction_loading,
+                self.extracted_summary_panel,
                 ft.Row([
                     self.templates_btn,
                     self.generate_btn,
@@ -1809,3 +1864,206 @@ class CentralPanel:
 
         if e.page:
             save_dialog.show(e.page)
+
+    # ============== ENTITY EXTRACTION ==============
+
+    def _extract_entities_debounced(self, notes_text: str, page):
+        """Extract entities in background thread."""
+        try:
+            # Perform extraction
+            extraction_result = self.note_extractor.extract_entities(notes_text)
+
+            # Build ExtractedData object
+            summary_data = extraction_result.get('summary', {})
+            extracted_data = ExtractedData(
+                patient_info=summary_data.get('patient_info', {}),
+                chief_complaint=summary_data.get('chief_complaint', []),
+                history=summary_data.get('history', []),
+                vitals=summary_data.get('vitals', {}),
+                symptoms=summary_data.get('symptoms', []),
+                diagnoses=summary_data.get('diagnoses', []),
+                medications=summary_data.get('medications', []),
+                investigations=summary_data.get('investigations', []),
+            )
+
+            # Update UI on main thread
+            if page:
+                def update_ui():
+                    if self.extraction_loading:
+                        self.extraction_loading.visible = False
+                    if self.extracted_summary_panel:
+                        self.extracted_summary_panel.update_data(extracted_data)
+                        self.extracted_summary_panel.visible = True
+                    if page:
+                        page.update()
+
+                page.run_task(update_ui)
+
+        except Exception as ex:
+            # Hide loading indicator on error
+            if page:
+                def hide_loading():
+                    if self.extraction_loading:
+                        self.extraction_loading.visible = False
+                    if page:
+                        page.update()
+                page.run_task(hide_loading)
+
+            print(f"Entity extraction error: {ex}")
+
+    def _on_entity_correction(self, category: str, old_value: str, new_value: str):
+        """
+        Handle user correction of extracted entity.
+
+        This feedback can be used to improve extraction in future versions.
+
+        Args:
+            category: Entity category (e.g., "symptoms", "diagnoses")
+            old_value: Original extracted value
+            new_value: Corrected value
+        """
+        # Log correction for future improvement
+        print(f"Entity correction - {category}: '{old_value}' -> '{new_value}'")
+
+        # Could store corrections in database for ML training
+        # For now, just acknowledge the correction
+        try:
+            # Could add correction to a feedback table
+            # self.db.add_entity_correction(category, old_value, new_value)
+            pass
+        except Exception as ex:
+            print(f"Failed to store correction: {ex}")
+
+    def _on_notes_change(self, e):
+        """Handle clinical notes change - debounce and update differentials and entity extraction."""
+        # Cancel previous timers if exist
+        if self._update_timer:
+            self._update_timer.cancel()
+        if self._extraction_timer:
+            self._extraction_timer.cancel()
+
+        # Get current text
+        notes_text = e.control.value.strip() if hasattr(e.control, 'value') else ""
+
+        # Handle entity extraction
+        if len(notes_text) < 20:
+            # Hide extraction panels if text is too short
+            if self.extraction_loading:
+                self.extraction_loading.visible = False
+            if self.extracted_summary_panel:
+                self.extracted_summary_panel.visible = False
+            if e.page:
+                e.page.update()
+        else:
+            # Show loading indicator
+            if self.extraction_loading:
+                self.extraction_loading.visible = True
+                if self.extracted_summary_panel:
+                    self.extracted_summary_panel.visible = False
+                if e.page:
+                    e.page.update()
+
+            # Schedule entity extraction after 300ms debounce
+            self._extraction_timer = threading.Timer(
+                0.3,
+                lambda: self._extract_entities_debounced(notes_text, e.page)
+            )
+            self._extraction_timer.start()
+
+        # Start differential diagnosis timer (500ms delay)
+        self._update_timer = threading.Timer(0.5, self._update_differentials_async)
+        self._update_timer.start()
+
+    def _update_differentials_async(self):
+        """Update differentials in background thread."""
+        if not self.current_patient or not self.notes_field:
+            return
+
+        clinical_notes = self.notes_field.value
+        if not clinical_notes or len(clinical_notes.strip()) < 10:
+            # Clear differentials if notes are too short
+            if self.differential_panel:
+                self.differential_panel.clear()
+            if self.red_flag_banner:
+                self.red_flag_banner.clear()
+            return
+
+        try:
+            # Parse symptoms from clinical notes
+            symptoms = parse_symptoms(clinical_notes)
+
+            # Extract vitals for red flag detection
+            vitals_from_notes = extract_vitals_from_notes(clinical_notes)
+
+            # Build patient context for priors adjustment
+            patient_context = {
+                'age': self.current_patient.age,
+                'gender': self.current_patient.gender,
+            }
+
+            # Calculate differentials
+            differentials = self.differential_engine.calculate_differentials(
+                symptoms=symptoms,
+                patient=patient_context
+            )
+
+            # Check for red flags
+            red_flag_presentation = {}
+
+            # Add symptoms as features
+            for symptom in symptoms:
+                red_flag_presentation[symptom] = True
+
+            # Add vitals from notes
+            red_flag_presentation.update(vitals_from_notes)
+
+            # Add vitals from form if available
+            if self.bp_systolic_field and self.bp_systolic_field.value:
+                try:
+                    red_flag_presentation['bp_systolic'] = int(self.bp_systolic_field.value)
+                except:
+                    pass
+            if self.bp_diastolic_field and self.bp_diastolic_field.value:
+                try:
+                    red_flag_presentation['bp_diastolic'] = int(self.bp_diastolic_field.value)
+                except:
+                    pass
+            if self.spo2_field and self.spo2_field.value:
+                try:
+                    red_flag_presentation['spo2'] = int(self.spo2_field.value)
+                except:
+                    pass
+            if self.temperature_field and self.temperature_field.value:
+                try:
+                    red_flag_presentation['temperature'] = float(self.temperature_field.value)
+                except:
+                    pass
+            if self.pulse_field and self.pulse_field.value:
+                try:
+                    red_flag_presentation['heart_rate'] = int(self.pulse_field.value)
+                except:
+                    pass
+
+            # Add patient age for red flag detection
+            if self.current_patient.age:
+                red_flag_presentation['age'] = self.current_patient.age
+
+            red_flags = self.red_flag_detector.check(red_flag_presentation)
+
+            # Update UI in main thread
+            if self.differential_panel and self.differential_panel.page:
+                self.differential_panel.update_differentials(differentials)
+
+            if self.red_flag_banner and self.red_flag_banner.page:
+                self.red_flag_banner.show_red_flags(red_flags)
+
+        except Exception as ex:
+            print(f"Error updating differentials: {ex}")
+            import traceback
+            traceback.print_exc()
+
+    def _on_red_flag_acknowledged(self, red_flag):
+        """Handle red flag acknowledgment."""
+        # Log to audit trail
+        print(f"Red flag acknowledged: {red_flag.category} - {red_flag.description}")
+        # TODO: Save to audit database

@@ -10,6 +10,7 @@ from ..services.llm import LLMService
 from ..services.rag import RAGService
 from ..services.pdf import PDFService
 from ..services.backup import BackupService
+from ..services.simple_backup import SimpleBackupService
 from ..services.settings import SettingsService
 from ..services.scheduler import BackupScheduler
 from ..services.integration.service_registry import ServiceRegistry, get_registry
@@ -19,6 +20,8 @@ from ..models.schemas import Patient, Visit, Prescription
 
 from .main_layout import MainLayout
 from .backup_dialog import show_backup_dialog
+from .simple_backup_dialog import show_simple_backup_dialog
+from .setup_wizard import SetupWizard
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,7 @@ class DocAssistApp:
         self.rag = RAGService()
         self.pdf = PDFService()
         self.backup = BackupService()
+        self.simple_backup = SimpleBackupService()  # Simple local backup without encryption
         self.settings = SettingsService()
 
         # Initialize backup scheduler
@@ -69,6 +73,8 @@ class DocAssistApp:
 
         # UI components (initialized in build)
         self.main_layout: Optional[MainLayout] = None
+        self.setup_wizard: Optional[SetupWizard] = None
+        self.showing_wizard: bool = False
 
     def _register_services(self):
         """Register services in the service registry."""
@@ -118,12 +124,57 @@ class DocAssistApp:
         # Set close handler
         page.on_close = self._on_app_close
 
+        # Check if this is first run
+        if self.settings.is_first_run():
+            logger.info("First run detected - showing setup wizard")
+            self.showing_wizard = True
+            self._show_setup_wizard()
+        else:
+            # Normal app flow
+            self._show_main_app()
+
+    def _show_setup_wizard(self):
+        """Show the first-run setup wizard."""
+        self.page.clean()
+
+        # Create and show wizard
+        self.setup_wizard = SetupWizard(
+            page=self.page,
+            settings_service=self.settings,
+            on_complete=self._on_wizard_complete
+        )
+
+        self.page.add(self.setup_wizard.build())
+        self.page.update()
+
+    def _on_wizard_complete(self):
+        """Handle wizard completion."""
+        logger.info("Setup wizard completed - showing main app")
+        self.showing_wizard = False
+
+        # Apply theme from settings
+        app_settings = self.settings.load()
+        self.page.theme_mode = ft.ThemeMode.DARK if app_settings.theme == "dark" else ft.ThemeMode.LIGHT
+
+        # Show main app
+        self._show_main_app()
+
+    def _show_main_app(self):
+        """Show the main application UI."""
+        self.page.clean()
+
+        # Check for database corruption and offer to restore
+        self._check_database_integrity()
+
         # Check LLM status in background
         self._check_llm_status()
 
         # Build UI with MainLayout
-        page.add(self._build_ui())
-        page.update()
+        self.page.add(self._build_ui())
+        self.page.update()
+
+        # Update backup status indicator
+        self._update_backup_status()
 
         # Load patients
         self._load_patients()
@@ -359,13 +410,17 @@ class DocAssistApp:
             return None
 
         try:
+            # Get doctor settings
+            doctor_settings = self.settings.get_doctor_settings()
+
             filepath = self.pdf.generate_prescription_pdf(
                 patient=self.current_patient,
                 prescription=prescription,
                 chief_complaint=chief_complaint,
-                doctor_name="Dr. ",  # TODO: Get from settings
-                clinic_name="",
-                clinic_address=""
+                doctor_name=doctor_settings.doctor_name or "Dr. ",
+                doctor_qualifications=doctor_settings.qualifications or "",
+                clinic_name=doctor_settings.clinic_name or "",
+                clinic_address=doctor_settings.clinic_address or ""
             )
 
             if filepath:
@@ -419,7 +474,13 @@ class DocAssistApp:
 
     def _on_backup_click(self, e):
         """Handle backup button click."""
-        show_backup_dialog(self.page, self.backup, self.scheduler, self.settings)
+        # Use simple backup dialog for better UX
+        show_simple_backup_dialog(self.page, self.simple_backup)
+
+        # Update backup status after dialog closes
+        if self.main_layout:
+            last_backup = self.simple_backup.get_last_backup_time()
+            self.main_layout.update_backup_status(last_backup)
 
     def _on_settings_click(self, e):
         """Handle settings click."""
@@ -478,11 +539,134 @@ class DocAssistApp:
 
     def _on_app_close(self, e):
         """Handle app close event."""
+        # Perform simple backup on close
+        backup_settings = self.settings.get_backup_settings()
+        if backup_settings.backup_on_close:
+            logger.info("Creating backup on app close...")
+            try:
+                backup_path = self.simple_backup.create_backup()
+                if backup_path:
+                    logger.info(f"Auto-backup created on close: {backup_path}")
+                else:
+                    logger.warning("Auto-backup on close failed")
+            except Exception as ex:
+                logger.error(f"Error creating auto-backup on close: {ex}", exc_info=True)
+
+        # Stop scheduler if running
         if self.scheduler:
             # Perform backup on close if enabled
             self.scheduler.backup_on_close()
             # Stop the scheduler
             self.scheduler.stop()
+
+    def _check_database_integrity(self):
+        """Check database integrity and offer to restore if corrupted."""
+        import sqlite3
+        from pathlib import Path
+
+        db_path = Path("data/clinic.db")
+        if not db_path.exists():
+            logger.info("Database does not exist yet - first run")
+            return
+
+        try:
+            # Try to open and query the database
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM patients")
+            cursor.fetchone()
+            conn.close()
+            logger.info("Database integrity check passed")
+        except Exception as e:
+            logger.error(f"Database integrity check failed: {e}", exc_info=True)
+
+            # Check if backups exist
+            backups = self.simple_backup.list_backups()
+            if backups:
+                # Show restore dialog
+                self._show_restore_offer_dialog(backups[0])
+            else:
+                logger.error("Database corrupted and no backups available!")
+
+    def _show_restore_offer_dialog(self, latest_backup):
+        """Show dialog offering to restore from backup.
+
+        Args:
+            latest_backup: Latest backup info
+        """
+        def on_restore(e):
+            dialog.open = False
+            self.page.update()
+
+            # Restore in background
+            def restore():
+                try:
+                    success = self.simple_backup.restore_backup(latest_backup.path)
+                    if success:
+                        logger.info("Database restored successfully!")
+                        # Reload the app
+                        if self.page:
+                            self.page.run_thread_safe(lambda: self.page.window_close())
+                    else:
+                        logger.error("Database restore failed")
+                except Exception as ex:
+                    logger.error(f"Restore error: {ex}", exc_info=True)
+
+            threading.Thread(target=restore, daemon=True).start()
+
+        def on_skip(e):
+            dialog.open = False
+            self.page.update()
+
+        dialog = ft.AlertDialog(
+            title=ft.Row([
+                ft.Icon(ft.Icons.WARNING_AMBER, color=ft.Colors.ORANGE_700),
+                ft.Text("Database Issue Detected"),
+            ], spacing=10),
+            content=ft.Column([
+                ft.Text(
+                    "The database appears to be corrupted or inaccessible.",
+                    weight=ft.FontWeight.BOLD,
+                ),
+                ft.Divider(),
+                ft.Text(f"A backup is available from:"),
+                ft.Text(
+                    f"{latest_backup.created_at.strftime('%Y-%m-%d %H:%M')}",
+                    size=14,
+                    weight=ft.FontWeight.W_500,
+                ),
+                ft.Text(
+                    f"Contains: {latest_backup.patient_count} patients, {latest_backup.visit_count} visits",
+                    size=12,
+                ),
+                ft.Divider(),
+                ft.Text(
+                    "Would you like to restore from this backup?",
+                    size=13,
+                ),
+            ], tight=True, spacing=5),
+            actions=[
+                ft.TextButton("Skip", on_click=on_skip),
+                ft.ElevatedButton(
+                    "Restore Backup",
+                    on_click=on_restore,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.ORANGE_700,
+                        color=ft.Colors.WHITE,
+                    ),
+                ),
+            ],
+        )
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
+
+    def _update_backup_status(self):
+        """Update backup status indicator with latest backup time."""
+        if self.main_layout:
+            last_backup = self.simple_backup.get_last_backup_time()
+            self.main_layout.update_backup_status(last_backup)
+            logger.info(f"Backup status updated - last backup: {last_backup}")
 
 
 def run_app():

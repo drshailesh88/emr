@@ -44,12 +44,13 @@ class BackupSettings:
 class DoctorSettings:
     """Doctor/clinic information."""
     doctor_name: str = ""
+    qualifications: str = ""  # e.g., "MBBS, MD (Medicine)"
+    registration_number: str = ""
+    specialization: str = ""
     clinic_name: str = ""
     clinic_address: str = ""
     phone: str = ""
     email: str = ""
-    registration_number: str = ""
-    specialization: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -265,3 +266,61 @@ class SettingsService:
         logger.warning("Resetting settings to defaults")
         self._settings = AppSettings()
         self.save()
+
+    def is_first_run(self) -> bool:
+        """Check if this is the first run (no doctor profile configured).
+
+        Returns:
+            True if no doctor profile is set up, False otherwise
+        """
+        doctor_settings = self.get_doctor_settings()
+        # First run if doctor name is empty or not set
+        return not doctor_settings.doctor_name.strip()
+
+    def save_doctor_profile(
+        self,
+        doctor_name: str,
+        qualifications: str = "",
+        registration_number: str = "",
+        specialization: str = ""
+    ):
+        """Save doctor profile information.
+
+        Args:
+            doctor_name: Doctor's full name
+            qualifications: Medical qualifications (e.g., "MBBS, MD")
+            registration_number: Medical registration number
+            specialization: Medical specialization
+        """
+        doctor_settings = self.get_doctor_settings()
+        doctor_settings.doctor_name = doctor_name
+        doctor_settings.qualifications = qualifications
+        doctor_settings.registration_number = registration_number
+        doctor_settings.specialization = specialization
+
+        self.update_doctor_settings(doctor_settings)
+        logger.info(f"Doctor profile saved: {doctor_name}")
+
+    def save_clinic_info(
+        self,
+        clinic_name: str,
+        clinic_address: str,
+        phone: str,
+        email: str = ""
+    ):
+        """Save clinic information.
+
+        Args:
+            clinic_name: Clinic/hospital name
+            clinic_address: Full clinic address
+            phone: Contact phone number
+            email: Contact email (optional)
+        """
+        doctor_settings = self.get_doctor_settings()
+        doctor_settings.clinic_name = clinic_name
+        doctor_settings.clinic_address = clinic_address
+        doctor_settings.phone = phone
+        doctor_settings.email = email
+
+        self.update_doctor_settings(doctor_settings)
+        logger.info(f"Clinic info saved: {clinic_name}")

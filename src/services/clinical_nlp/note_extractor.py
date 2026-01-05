@@ -472,3 +472,178 @@ JSON:"""
                 pass
 
         return []
+
+    def extract_entities(self, transcript: str) -> Dict[str, any]:
+        """
+        Extract all entities from clinical notes for UI display.
+
+        This method extracts entities and returns them in a format suitable
+        for real-time UI display with highlighting and summary panels.
+
+        Args:
+            transcript: Clinical notes text
+
+        Returns:
+            Dictionary with:
+            - entities: List of entity spans for highlighting
+            - summary: Extracted data organized by category
+        """
+        from .medical_entity_recognition import MedicalNER
+        from .abbreviations import expand_abbreviation
+
+        # Initialize NER if not already done
+        ner = MedicalNER(llm_service=self.llm_service)
+
+        # Extract all entity types
+        symptoms = ner.extract_symptoms(transcript)
+        diagnoses = ner.extract_diagnoses(transcript)
+        drugs = ner.extract_drugs(transcript)
+        investigations = ner.extract_investigations(transcript)
+        procedures = ner.extract_procedures(transcript)
+
+        # Extract vitals using existing method
+        vitals_obj = self.extract_vitals(transcript)
+
+        # Build entity spans for highlighting
+        entity_spans = []
+
+        # Add symptom spans
+        for symptom in symptoms:
+            if symptom.name and symptom.context:
+                # Find position in original text
+                start = transcript.lower().find(symptom.name.lower())
+                if start != -1:
+                    entity_spans.append({
+                        'start': start,
+                        'end': start + len(symptom.name),
+                        'text': symptom.name,
+                        'entity_type': 'symptom',
+                        'normalized_value': f"{symptom.severity.value if symptom.severity else ''} {symptom.name}".strip(),
+                        'confidence': 0.9
+                    })
+
+        # Add diagnosis spans
+        for diagnosis in diagnoses:
+            if diagnosis.name:
+                start = transcript.lower().find(diagnosis.name.lower())
+                if start != -1:
+                    entity_spans.append({
+                        'start': start,
+                        'end': start + len(diagnosis.name),
+                        'text': diagnosis.name,
+                        'entity_type': 'diagnosis',
+                        'normalized_value': f"{diagnosis.name} ({diagnosis.icd10_code})" if diagnosis.icd10_code else diagnosis.name,
+                        'confidence': diagnosis.confidence
+                    })
+
+        # Add medication spans
+        for drug in drugs:
+            if drug.name:
+                start = transcript.lower().find(drug.name.lower())
+                if start != -1:
+                    entity_spans.append({
+                        'start': start,
+                        'end': start + len(drug.name),
+                        'text': drug.name,
+                        'entity_type': 'medication',
+                        'normalized_value': f"{drug.name} {drug.strength} {drug.frequency}".strip(),
+                        'confidence': 0.9
+                    })
+
+        # Add investigation spans
+        for inv in investigations:
+            if inv.name:
+                start = transcript.lower().find(inv.name.lower())
+                if start != -1:
+                    entity_spans.append({
+                        'start': start,
+                        'end': start + len(inv.name),
+                        'text': inv.name,
+                        'entity_type': 'investigation',
+                        'normalized_value': inv.name,
+                        'confidence': 0.95
+                    })
+
+        # Add procedure spans
+        for proc in procedures:
+            if proc.name:
+                start = transcript.lower().find(proc.name.lower())
+                if start != -1:
+                    entity_spans.append({
+                        'start': start,
+                        'end': start + len(proc.name),
+                        'text': proc.name,
+                        'entity_type': 'procedure',
+                        'normalized_value': proc.name,
+                        'confidence': 0.9
+                    })
+
+        # Add vital signs spans
+        for vital_name, pattern in self.VITAL_PATTERNS.items():
+            matches = re.finditer(pattern, transcript, re.IGNORECASE)
+            for match in matches:
+                entity_spans.append({
+                    'start': match.start(),
+                    'end': match.end(),
+                    'text': match.group(0),
+                    'entity_type': 'vital',
+                    'normalized_value': match.group(0),
+                    'confidence': 1.0
+                })
+
+        # Add duration spans
+        duration_matches = re.finditer(self.DURATION_PATTERN, transcript, re.IGNORECASE)
+        for match in duration_matches:
+            entity_spans.append({
+                'start': match.start(),
+                'end': match.end(),
+                'text': match.group(0),
+                'entity_type': 'duration',
+                'normalized_value': f"{match.group(1)} {match.group(2)}",
+                'confidence': 1.0
+            })
+
+        # Build summary data
+        summary = {
+            'patient_info': {},  # Could extract age/gender from text
+            'chief_complaint': [self._extract_chief_complaint(transcript)] if self._extract_chief_complaint(transcript) else [],
+            'history': [d.name for d in diagnoses if not d.is_primary],  # Secondary diagnoses = history
+            'vitals': {},
+            'symptoms': [s.name for s in symptoms],
+            'diagnoses': [d.name for d in diagnoses if d.is_primary or not d.is_differential],
+            'medications': [
+                {
+                    'drug_name': d.name,
+                    'strength': d.strength or '',
+                    'frequency': d.frequency or ''
+                }
+                for d in drugs
+            ],
+            'investigations': [i.name for i in investigations],
+        }
+
+        # Add vitals to summary
+        if vitals_obj.bp_systolic and vitals_obj.bp_diastolic:
+            summary['vitals']['BP'] = f"{vitals_obj.bp_systolic}/{vitals_obj.bp_diastolic} mmHg"
+        if vitals_obj.pulse:
+            summary['vitals']['Pulse'] = f"{vitals_obj.pulse} /min"
+        if vitals_obj.temperature:
+            summary['vitals']['Temp'] = f"{vitals_obj.temperature}°C"
+        if vitals_obj.spo2:
+            summary['vitals']['SpO2'] = f"{vitals_obj.spo2}%"
+        if vitals_obj.weight:
+            summary['vitals']['Weight'] = f"{vitals_obj.weight} kg"
+
+        # Extract patient info from text (age, gender)
+        age_pattern = r'(\d{1,3})\s*(?:y|yr|year|years?|yo)\s*(?:old)?(?:/|\s+)([MFO]|male|female|other)?'
+        age_match = re.search(age_pattern, transcript, re.IGNORECASE)
+        if age_match:
+            summary['patient_info']['Age'] = f"{age_match.group(1)}y"
+            if age_match.group(2):
+                gender = age_match.group(2).upper()[0]
+                summary['patient_info']['Gender'] = gender
+
+        return {
+            'entities': entity_spans,
+            'summary': summary
+        }

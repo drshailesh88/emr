@@ -13,6 +13,7 @@ from .timeline.patient_timeline import PatientTimeline
 from .growth.growth_dashboard import GrowthDashboard
 from .navigation import NavigationTab, TabNavigationBar
 from .status_bar import StatusBar
+from .components.backup_status import BackupStatusIndicator
 
 from ..models.schemas import Patient, Visit, Prescription
 
@@ -105,6 +106,7 @@ class MainLayout(ft.UserControl):
         self.growth_dashboard: Optional[GrowthDashboard] = None
         self.tab_navigation: Optional[TabNavigationBar] = None
         self.status_bar: Optional[StatusBar] = None
+        self.backup_status_indicator: Optional[BackupStatusIndicator] = None
 
         # Content container for tab switching
         self.content_container: Optional[ft.Container] = None
@@ -227,6 +229,12 @@ class MainLayout(ft.UserControl):
             is_dark=self.is_dark,
         )
 
+        # Backup status indicator
+        self.backup_status_indicator = BackupStatusIndicator(
+            on_click=lambda e: self.on_backup_click(e) if self.on_backup_click else None,
+            warning_threshold_hours=24,
+        )
+
         # Content container (starts with prescription panel)
         self.content_container = ft.Container(
             content=self.central_panel.build(),
@@ -251,11 +259,9 @@ class MainLayout(ft.UserControl):
                 ], spacing=10),
                 # Right controls
                 ft.Row([
-                    ft.IconButton(
-                        icon=ft.Icons.BACKUP,
-                        tooltip="Backup & Restore",
-                        on_click=lambda e: self.on_backup_click(e) if self.on_backup_click else None,
-                    ),
+                    # Backup status indicator
+                    self.backup_status_indicator.build() if self.backup_status_indicator else ft.Container(),
+                    ft.Container(width=10),  # Spacer
                     ft.IconButton(
                         icon=ft.Icons.SETTINGS,
                         tooltip="Settings",
@@ -537,6 +543,15 @@ class MainLayout(ft.UserControl):
             connected: Whether backup service is connected
         """
         self.status_bar.set_backup_status(connected)
+
+    def update_backup_status(self, last_backup_time):
+        """Update backup status indicator.
+
+        Args:
+            last_backup_time: datetime of last backup or None
+        """
+        if self.backup_status_indicator:
+            self.backup_status_indicator.update_status(last_backup_time)
 
     def show_ambient_panel(self):
         """Show ambient panel (for consultation mode)."""

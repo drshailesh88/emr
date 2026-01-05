@@ -1,0 +1,78 @@
+================================================================================
+                    DOCASSIST EMR - SAMPLE DATA QUICK START
+================================================================================
+
+SEED SAMPLE DATA
+----------------
+To populate your EMR with realistic Indian patient data for demo/testing:
+
+    python3 seed_sample_data.py
+
+This will create:
+  ✓ 10 patients with diverse medical conditions
+  ✓ 22 visits showing disease progression
+  ✓ 37 investigations (labs) with normal/abnormal values
+  ✓ 6 procedures (ECG, Echo, Angiography, X-rays, Endoscopy)
+
+
+VIEW SAMPLE DATA
+----------------
+List all patients:
+
+    python3 view_sample_data.py
+
+View specific patient details:
+
+    python3 view_sample_data.py <patient_id>
+
+Example:
+    python3 view_sample_data.py 1   # Ram Kumar Sharma (Diabetic)
+    python3 view_sample_data.py 4   # Lakshmi V. (Cardiac, post-PCI)
+
+
+SAMPLE PATIENTS AT A GLANCE
+---------------------------
+1.  Ram Kumar Sharma (65M)      - Type 2 Diabetes + Dyslipidemia
+2.  Priya Devi (52F)            - Essential Hypertension
+3.  Mohammed Ali Khan (58M)     - URTI (Acute)
+4.  Lakshmi Venkataraman (45F)  - CAD, post-PCI with stent
+5.  Rajesh Patel (48M)          - Gastritis, GERD
+6.  Sunita Singh (38F)          - Diabetes + Hypertension (Comorbid)
+7.  Arun Bose (72M)             - Osteoarthritis (Bilateral knee)
+8.  Geeta Menon (61F)           - Primary Hypothyroidism
+9.  Vijay Reddy (42M)           - URTI (Acute)
+10. Anita Deshmukh (55F)        - Type 2 Diabetes
+
+
+RESEED DATABASE
+---------------
+To delete all data and reseed:
+
+    rm data/clinic.db
+    python3 seed_sample_data.py
+
+
+TEST RAG/AI FEATURES
+--------------------
+Once seeded, try these AI queries in the EMR:
+
+  • "What was Ram Kumar's latest HbA1c?"
+  • "Which patients are diabetic?"
+  • "Show me Lakshmi's cardiac procedures"
+  • "List all patients with hypertension"
+  • "What medications is Arun Bose taking?"
+
+
+FILES CREATED
+-------------
+  src/utils/sample_data.py       - Sample data seeder class
+  seed_sample_data.py            - Script to seed database
+  view_sample_data.py            - Script to view seeded data
+  SAMPLE_DATA.md                 - Complete documentation
+
+
+DOCUMENTATION
+-------------
+For complete patient details, see:  SAMPLE_DATA.md
+
+================================================================================
