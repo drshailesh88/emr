@@ -22,6 +22,8 @@ from .main_layout import MainLayout
 from .backup_dialog import show_backup_dialog
 from .simple_backup_dialog import show_simple_backup_dialog
 from .setup_wizard import SetupWizard
+from .components.tutorial_overlay import show_tutorial_overlay
+from .keyboard_shortcuts import KeyboardShortcutHandler
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,9 @@ class DocAssistApp:
         self.main_layout: Optional[MainLayout] = None
         self.setup_wizard: Optional[SetupWizard] = None
         self.showing_wizard: bool = False
+        self.showing_tutorial: bool = False
+        self.tutorial_overlay: Optional[ft.Stack] = None
+        self.keyboard_shortcuts: Optional[KeyboardShortcutHandler] = None
 
     def _register_services(self):
         """Register services in the service registry."""
@@ -159,6 +164,11 @@ class DocAssistApp:
         # Show main app
         self._show_main_app()
 
+        # Show tutorial if not completed
+        if not self.settings.is_tutorial_completed():
+            logger.info("First run - showing tutorial overlay")
+            self._show_tutorial_overlay()
+
     def _show_main_app(self):
         """Show the main application UI."""
         self.page.clean()
@@ -172,6 +182,9 @@ class DocAssistApp:
         # Build UI with MainLayout
         self.page.add(self._build_ui())
         self.page.update()
+
+        # Initialize keyboard shortcuts (after page is set up)
+        self._setup_keyboard_shortcuts()
 
         # Update backup status indicator
         self._update_backup_status()
@@ -188,6 +201,12 @@ class DocAssistApp:
             EventType.SERVICE_STARTED,
             {"service": "DocAssistApp"}
         )
+
+        # Show tutorial if not completed and not just finished wizard
+        # (wizard completion handler shows tutorial separately)
+        if not self.showing_wizard and not self.settings.is_tutorial_completed():
+            logger.info("First run detected - showing tutorial overlay")
+            self._show_tutorial_overlay()
 
     def _build_ui(self) -> ft.Control:
         """Build the main UI layout using MainLayout."""
@@ -523,6 +542,26 @@ class DocAssistApp:
                 ft.Text("Search:", weight=ft.FontWeight.BOLD),
                 ft.Text("Search patients by name or natural language", size=12),
                 ft.Text("Example: 'Ram who had PCI to LAD'", size=12),
+                ft.Divider(),
+                ft.Text("Keyboard Shortcuts:", weight=ft.FontWeight.BOLD),
+                ft.Text("Press F1 or Ctrl+/ to see all shortcuts", size=12),
+                ft.Text("Quick access: Ctrl+N (new), Ctrl+S (save), Ctrl+F (search)", size=12),
+                ft.Divider(),
+                ft.Container(
+                    content=ft.Row([
+                        ft.TextButton(
+                            "Show Tutorial Again",
+                            icon=ft.Icons.SCHOOL_ROUNDED,
+                            on_click=lambda e: self._retrigger_tutorial(dialog),
+                        ),
+                        ft.TextButton(
+                            "View All Shortcuts",
+                            icon=ft.Icons.KEYBOARD,
+                            on_click=lambda e: self._show_shortcuts_from_help(dialog),
+                        ),
+                    ], alignment=ft.MainAxisAlignment.CENTER),
+                    alignment=ft.alignment.center,
+                ),
             ], tight=True, spacing=5, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Close", on_click=lambda e: self._close_dialog(dialog)),
@@ -667,6 +706,206 @@ class DocAssistApp:
             last_backup = self.simple_backup.get_last_backup_time()
             self.main_layout.update_backup_status(last_backup)
             logger.info(f"Backup status updated - last backup: {last_backup}")
+
+    def _show_tutorial_overlay(self):
+        """Show the tutorial overlay."""
+        if self.showing_tutorial:
+            logger.warning("Tutorial already showing")
+            return
+
+        self.showing_tutorial = True
+
+        # Get current theme
+        app_settings = self.settings.load()
+        is_dark = app_settings.theme == "dark"
+
+        # Create tutorial overlay
+        self.tutorial_overlay = show_tutorial_overlay(
+            page=self.page,
+            on_complete=self._on_tutorial_complete,
+            on_skip=self._on_tutorial_skip,
+            is_dark=is_dark,
+        )
+
+        # Add tutorial as overlay
+        self.page.overlay.append(self.tutorial_overlay)
+        self.page.update()
+
+    def _on_tutorial_complete(self):
+        """Handle tutorial completion."""
+        logger.info("Tutorial completed by user")
+
+        # Mark tutorial as completed in settings
+        self.settings.mark_tutorial_completed()
+
+        # Remove tutorial overlay
+        self._hide_tutorial_overlay()
+
+    def _on_tutorial_skip(self):
+        """Handle tutorial skip."""
+        logger.info("Tutorial skipped by user")
+
+        # Mark tutorial as completed (so it doesn't show again)
+        self.settings.mark_tutorial_completed()
+
+        # Remove tutorial overlay
+        self._hide_tutorial_overlay()
+
+    def _hide_tutorial_overlay(self):
+        """Hide the tutorial overlay."""
+        if self.tutorial_overlay and self.tutorial_overlay in self.page.overlay:
+            self.page.overlay.remove(self.tutorial_overlay)
+            self.tutorial_overlay = None
+            self.showing_tutorial = False
+            self.page.update()
+
+    def _retrigger_tutorial(self, help_dialog):
+        """Re-trigger the tutorial from help menu.
+
+        Args:
+            help_dialog: The help dialog to close
+        """
+        # Close help dialog first
+        self._close_dialog(help_dialog)
+
+        # Reset and show tutorial
+        self.settings.reset_tutorial()
+        self._show_tutorial_overlay()
+
+    def _show_shortcuts_from_help(self, help_dialog):
+        """Show keyboard shortcuts help from help menu.
+
+        Args:
+            help_dialog: The help dialog to close
+        """
+        # Close help dialog first
+        self._close_dialog(help_dialog)
+
+        # Show shortcuts help overlay
+        if self.keyboard_shortcuts:
+            self.keyboard_shortcuts._show_help_overlay()
+
+    def _setup_keyboard_shortcuts(self):
+        """Setup global keyboard shortcuts."""
+        # Initialize keyboard shortcuts handler
+        self.keyboard_shortcuts = KeyboardShortcutHandler(self.page)
+
+        # Wire up callbacks
+        self.keyboard_shortcuts.on_new_patient = self._shortcut_new_patient
+        self.keyboard_shortcuts.on_save = self._shortcut_save
+        self.keyboard_shortcuts.on_focus_search = self._shortcut_focus_search
+        self.keyboard_shortcuts.on_print_pdf = self._shortcut_print_pdf
+        self.keyboard_shortcuts.on_toggle_voice = self._shortcut_toggle_voice
+        self.keyboard_shortcuts.on_submit = self._shortcut_submit
+        self.keyboard_shortcuts.on_switch_tab = self._shortcut_switch_tab
+        self.keyboard_shortcuts.on_backup = self._shortcut_backup
+        self.keyboard_shortcuts.on_refresh_patients = self._shortcut_refresh_patients
+        self.keyboard_shortcuts.on_navigate_patient = self._shortcut_navigate_patient
+        self.keyboard_shortcuts.on_generate_rx = self._shortcut_generate_rx
+        self.keyboard_shortcuts.on_settings = self._shortcut_settings
+        self.keyboard_shortcuts.on_help = self._shortcut_help
+
+        logger.info("Keyboard shortcuts initialized and wired up")
+
+    # Keyboard shortcut action handlers
+    def _shortcut_new_patient(self):
+        """Handle new patient keyboard shortcut."""
+        if self.main_layout and self.main_layout.patient_panel:
+            # Trigger the new patient dialog
+            self.main_layout.patient_panel._on_add_patient_click(None)
+            logger.debug("Keyboard shortcut: New patient triggered")
+
+    def _shortcut_save(self):
+        """Handle save keyboard shortcut."""
+        if self.main_layout and self.main_layout.central_panel:
+            # Trigger save visit
+            self.main_layout.central_panel._on_save_click(None)
+            logger.debug("Keyboard shortcut: Save triggered")
+
+    def _shortcut_focus_search(self):
+        """Handle focus search keyboard shortcut."""
+        if self.main_layout and self.main_layout.patient_panel:
+            # Focus the search field
+            if hasattr(self.main_layout.patient_panel, 'search_field'):
+                search_field = self.main_layout.patient_panel.search_field
+                if search_field:
+                    search_field.focus()
+                    self.page.update()
+                    logger.debug("Keyboard shortcut: Search focused")
+
+    def _shortcut_print_pdf(self):
+        """Handle print PDF keyboard shortcut."""
+        if self.main_layout and self.main_layout.central_panel:
+            # Trigger print PDF
+            if hasattr(self.main_layout.central_panel, 'print_btn'):
+                print_btn = self.main_layout.central_panel.print_btn
+                if print_btn and not print_btn.disabled:
+                    self.main_layout.central_panel._on_print_click(None)
+                    logger.debug("Keyboard shortcut: Print PDF triggered")
+
+    def _shortcut_toggle_voice(self):
+        """Handle toggle voice keyboard shortcut."""
+        if self.main_layout and self.main_layout.central_panel:
+            # Toggle voice recording
+            if hasattr(self.main_layout.central_panel, 'voice_btn'):
+                voice_btn = self.main_layout.central_panel.voice_btn
+                if voice_btn and hasattr(voice_btn, '_toggle_recording'):
+                    voice_btn._toggle_recording(None)
+                    self.page.update()
+                    logger.debug("Keyboard shortcut: Voice toggle triggered")
+
+    def _shortcut_submit(self):
+        """Handle submit keyboard shortcut."""
+        # Same as save for now - could be different based on context
+        self._shortcut_save()
+
+    def _shortcut_switch_tab(self, tab_index: int):
+        """Handle tab switch keyboard shortcut."""
+        if self.main_layout and self.main_layout.tab_navigation:
+            # Switch to the specified tab
+            self.main_layout._switch_to_tab(tab_index)
+            logger.debug(f"Keyboard shortcut: Switched to tab {tab_index}")
+
+    def _shortcut_backup(self):
+        """Handle backup keyboard shortcut."""
+        # Trigger backup dialog
+        self._on_backup_click(None)
+        logger.debug("Keyboard shortcut: Backup triggered")
+
+    def _shortcut_refresh_patients(self):
+        """Handle refresh patients keyboard shortcut."""
+        # Reload patient list
+        self._load_patients()
+        logger.debug("Keyboard shortcut: Patients refreshed")
+
+    def _shortcut_navigate_patient(self, direction: str):
+        """Handle patient navigation keyboard shortcut."""
+        if self.main_layout and self.main_layout.patient_panel:
+            if hasattr(self.main_layout.patient_panel, 'navigate_patient'):
+                self.main_layout.patient_panel.navigate_patient(direction)
+                logger.debug(f"Keyboard shortcut: Navigate patient {direction}")
+
+    def _shortcut_generate_rx(self):
+        """Handle generate prescription keyboard shortcut."""
+        if self.main_layout and self.main_layout.central_panel:
+            # Trigger prescription generation
+            if hasattr(self.main_layout.central_panel, 'generate_btn'):
+                generate_btn = self.main_layout.central_panel.generate_btn
+                if generate_btn and not generate_btn.disabled:
+                    self.main_layout.central_panel._on_generate_click(None)
+                    logger.debug("Keyboard shortcut: Generate Rx triggered")
+
+    def _shortcut_settings(self):
+        """Handle settings keyboard shortcut."""
+        # Trigger settings dialog
+        self._on_settings_click(None)
+        logger.debug("Keyboard shortcut: Settings triggered")
+
+    def _shortcut_help(self):
+        """Handle help keyboard shortcut."""
+        # Trigger help dialog
+        self._on_help_click(None)
+        logger.debug("Keyboard shortcut: Help triggered")
 
 
 def run_app():

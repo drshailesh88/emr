@@ -13,6 +13,7 @@ from .audit_history_dialog import AuditHistoryDialog
 from .dialogs import ConfirmationDialog, EditInvestigationDialog, EditProcedureDialog
 from .components.expandable_text import ExpandableTextField, ExpandableTextArea
 from .components.drug_autocomplete import DrugAutocomplete
+from .components.language_indicator import LanguageIndicator
 from .template_browser import TemplateBrowser, SaveTemplateDialog
 from .lab_trends_dialog import LabTrendsDialog
 from ..services.reference_ranges import TREND_PANELS, get_reference_range
@@ -22,7 +23,7 @@ from .whatsapp_share_dialog import show_whatsapp_share
 from .whatsapp.send_message_dialog import show_send_message_dialog
 from ..services.whatsapp_settings import WhatsAppSettingsService
 from .appointment_panel import show_schedule_followup
-from .components.voice_input import VoiceInputButton
+from .components.voice_input_button_enhanced import VoiceInputButtonEnhanced, TranscriptionPreviewDialog
 from ..services.voice import is_voice_available
 from .reminder_dialog import show_reminder_settings
 from ..services.diagnosis.differential_engine import DifferentialEngine
@@ -30,9 +31,11 @@ from ..services.diagnosis.red_flag_detector import RedFlagDetector
 from ..services.diagnosis.symptom_parser import parse_symptoms, extract_vitals_from_notes
 from .components.differential_panel import DifferentialPanel
 from .components.red_flag_banner import RedFlagBanner
+from .components.care_gap_alert import CareGapAlert
 from .components.extracted_summary import ExtractedSummaryPanel, ExtractedData, ExtractionLoadingIndicator
 from .components.entity_highlight import EntitySpan
 from ..services.clinical_nlp.note_extractor import ClinicalNoteExtractor
+from ..services.analytics.care_gap_detector import CareGapDetector
 
 
 class CentralPanel:
@@ -62,6 +65,9 @@ class CentralPanel:
         # Differential diagnosis engine and detector
         self.differential_engine = DifferentialEngine()
         self.red_flag_detector = RedFlagDetector()
+
+        # Care gap detector
+        self.care_gap_detector = CareGapDetector(db_service=db)
 
         # Clinical NLP extractor
         self.note_extractor = ClinicalNoteExtractor(llm_service=llm)
@@ -116,6 +122,27 @@ class CentralPanel:
         self.extracted_summary_panel: Optional[ExtractedSummaryPanel] = None
         self.extraction_loading: Optional[ExtractionLoadingIndicator] = None
         self.red_flag_banner: Optional[RedFlagBanner] = None
+        self.care_gap_alert: Optional[CareGapAlert] = None
+
+        # Language indicators
+        self.notes_language_indicator: Optional[LanguageIndicator] = None
+        self.complaint_language_indicator: Optional[LanguageIndicator] = None
+
+    def setup_keyboard_shortcuts(self, page: ft.Page):
+        """Setup keyboard shortcuts for voice input.
+
+        Args:
+            page: The Flet page to attach keyboard handlers to
+        """
+        def handle_keyboard(e: ft.KeyboardEvent):
+            # Ctrl+M for voice input toggle
+            if e.key == "M" and e.ctrl:
+                if self.voice_btn and hasattr(self.voice_btn, '_toggle_recording'):
+                    # Toggle recording
+                    self.voice_btn._toggle_recording(None)
+                    e.page.update()
+
+        page.on_keyboard_event = handle_keyboard
 
     def build(self) -> ft.Control:
         """Build the central panel UI."""
@@ -144,7 +171,11 @@ class CentralPanel:
             min_lines=1,
             max_lines=2,
             border_radius=8,
+            on_change=self._on_complaint_change,
         )
+
+        # Language indicator for complaint
+        self.complaint_language_indicator = LanguageIndicator(visible=True)
 
         # Clinical notes field (with text expansion)
         self.notes_field = ExpandableTextArea(
@@ -159,11 +190,15 @@ class CentralPanel:
             on_change=self._on_notes_change,
         )
 
-        # Voice input button for notes
-        self.voice_btn = VoiceInputButton(
-            on_text=self._on_voice_text,
-            size=40,
-            tooltip="Voice dictation - click to start/stop"
+        # Language indicator for notes
+        self.notes_language_indicator = LanguageIndicator(visible=True)
+
+        # Voice input button for notes (enhanced with waveform)
+        self.voice_btn = VoiceInputButtonEnhanced(
+            on_text=self._on_voice_text_preview,
+            size=48,
+            tooltip="Voice dictation (Ctrl+M)",
+            show_waveform=True
         )
 
         # Differential diagnosis panel
@@ -273,13 +308,40 @@ class CentralPanel:
             on_acknowledged=self._on_red_flag_acknowledged
         )
 
+        # Care gap alert
+        self.care_gap_alert = CareGapAlert(
+            on_action_clicked=self._on_care_gap_action,
+            on_dismissed=self._on_care_gap_dismissed
+        )
+
+        # Complaint field with language indicator
+        complaint_with_indicator = ft.Stack([
+            self.complaint_field,
+            ft.Container(
+                content=self.complaint_language_indicator,
+                right=10,
+                top=8,
+            ),
+        ])
+
+        # Notes container with language indicator (already has voice button and differential panel)
+        notes_with_indicator = ft.Stack([
+            self.notes_container,
+            ft.Container(
+                content=self.notes_language_indicator,
+                right=10,
+                top=35,  # Position below label
+            ),
+        ])
+
         # Prescription tab content
         rx_tab_content = ft.Container(
             content=ft.Column([
                 self.red_flag_banner,
+                self.care_gap_alert,
                 self.vitals_section,
-                self.complaint_field,
-                self.notes_container,
+                complaint_with_indicator,
+                notes_with_indicator,
                 self.extraction_loading,
                 self.extracted_summary_panel,
                 ft.Row([
@@ -779,6 +841,9 @@ class CentralPanel:
         self._refresh_vitals_history()
         self._refresh_trends()
         self._refresh_flowsheets()
+
+        # Detect and show care gaps
+        self._check_care_gaps()
 
         if self.patient_header.page:
             self.patient_header.page.update()
@@ -1789,12 +1854,25 @@ class CentralPanel:
             pdf_path=pdf_path
         )
 
-    def _on_voice_text(self, text: str):
-        """Handle voice transcription - insert into notes field."""
+    def _on_voice_text_preview(self, text: str):
+        """Handle voice transcription - show preview before inserting."""
+        if not text or not self.notes_field.page:
+            return
+
+        # Show transcription preview dialog
+        preview_dialog = TranscriptionPreviewDialog(
+            transcribed_text=text,
+            on_insert=self._on_voice_text_insert,
+            on_cancel=None
+        )
+        preview_dialog.show(self.notes_field.page)
+
+    def _on_voice_text_insert(self, text: str):
+        """Insert transcribed text into notes field after preview confirmation."""
         if not text:
             return
 
-        # Get current value and cursor position
+        # Get current value
         current = self.notes_field.value or ""
 
         # Add space if needed before inserting
@@ -1803,6 +1881,16 @@ class CentralPanel:
 
         # Append transcribed text
         self.notes_field.value = current + text
+
+        # Trigger differential update
+        if hasattr(self.notes_field, 'on_change') and self.notes_field.on_change:
+            # Create a fake event to trigger on_change
+            class FakeEvent:
+                def __init__(self, control):
+                    self.control = control
+                    self.page = control.page
+
+            self.notes_field.on_change(FakeEvent(self.notes_field))
 
         # Update the field
         if self.notes_field.page:
@@ -1937,6 +2025,15 @@ class CentralPanel:
         except Exception as ex:
             print(f"Failed to store correction: {ex}")
 
+    def _on_complaint_change(self, e):
+        """Handle chief complaint change - update language indicator."""
+        # Get current text
+        complaint_text = e.control.value if hasattr(e.control, 'value') else ""
+
+        # Update language indicator
+        if self.complaint_language_indicator:
+            self.complaint_language_indicator.update_text(complaint_text)
+
     def _on_notes_change(self, e):
         """Handle clinical notes change - debounce and update differentials and entity extraction."""
         # Cancel previous timers if exist
@@ -1947,6 +2044,10 @@ class CentralPanel:
 
         # Get current text
         notes_text = e.control.value.strip() if hasattr(e.control, 'value') else ""
+
+        # Update language indicator
+        if self.notes_language_indicator:
+            self.notes_language_indicator.update_text(e.control.value if hasattr(e.control, 'value') else "")
 
         # Handle entity extraction
         if len(notes_text) < 20:
@@ -2070,3 +2171,83 @@ class CentralPanel:
         # Log to audit trail
         print(f"Red flag acknowledged: {red_flag.category} - {red_flag.description}")
         # TODO: Save to audit database
+
+    def _check_care_gaps(self):
+        """Detect and display care gaps for current patient."""
+        if not self.current_patient or not self.care_gap_alert:
+            return
+
+        try:
+            # Detect care gaps
+            care_gaps = self.care_gap_detector.detect_care_gaps(self.current_patient.id)
+
+            # Show in UI
+            if care_gaps:
+                self.care_gap_alert.show_care_gaps(care_gaps)
+            else:
+                self.care_gap_alert.clear()
+
+        except Exception as e:
+            print(f"Error detecting care gaps: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _on_care_gap_action(self, gap):
+        """Handle care gap action button click.
+
+        Args:
+            gap: CareGap object
+        """
+        if not self.page:
+            return
+
+        # Show a simple dialog with the recommendation
+        def close_dialog(e):
+            dialog.open = False
+            if self.page:
+                self.page.update()
+
+        action_text = {
+            "order": "Order Created",
+            "reminder": "Reminder Set",
+            "schedule": "Scheduled",
+        }.get(gap.action_type, "Action Taken")
+
+        dialog = ft.AlertDialog(
+            title=ft.Text(action_text),
+            content=ft.Column([
+                ft.Text(f"Action: {gap.description}"),
+                ft.Text(f"Recommendation: {gap.recommendation}"),
+                ft.Divider(),
+                ft.Text(
+                    "This is a placeholder. In a full implementation, this would:",
+                    size=12,
+                    italic=True,
+                ),
+                ft.Text("• Create an investigation order", size=11),
+                ft.Text("• Set a reminder/alert", size=11),
+                ft.Text("• Schedule a follow-up appointment", size=11),
+            ], tight=True, spacing=8),
+            actions=[
+                ft.TextButton("Close", on_click=close_dialog),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
+
+        # Log the action
+        print(f"[CARE GAP ACTION] {gap.action_type}: {gap.description}")
+
+    def _on_care_gap_dismissed(self, gap, reason):
+        """Handle care gap dismissal.
+
+        Args:
+            gap: CareGap object
+            reason: Dismissal reason
+        """
+        # Log the dismissal
+        print(f"[CARE GAP DISMISSED] {gap.description} - Reason: {reason}")
+        # TODO: Save dismissal to database with timestamp

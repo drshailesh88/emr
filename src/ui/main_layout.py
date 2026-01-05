@@ -115,6 +115,12 @@ class MainLayout(ft.UserControl):
         if self.event_bus:
             self._setup_event_subscriptions()
 
+    def did_mount(self):
+        """Called when component is mounted and has access to page."""
+        # Setup keyboard shortcuts for voice input
+        if self.central_panel and self.page:
+            self.central_panel.setup_keyboard_shortcuts(self.page)
+
     def build(self):
         """Build the main layout."""
         # Initialize all components
@@ -178,6 +184,7 @@ class MainLayout(ft.UserControl):
             on_patient_selected=self._on_patient_selected,
             on_search=self._on_patient_search,
             on_new_patient=self._on_new_patient,
+            on_patient_updated=self._on_patient_updated,
             db=self.db,
             rag=self.rag,
         )
@@ -330,6 +337,29 @@ class MainLayout(ft.UserControl):
 
         self.update()
 
+    def _switch_to_tab(self, tab_index: int):
+        """Switch to a tab by index (for keyboard shortcuts).
+
+        Args:
+            tab_index: Index of the tab (0-3)
+        """
+        # Map index to tab
+        tab_map = {
+            0: NavigationTab.PRESCRIPTION,
+            1: NavigationTab.TIMELINE,
+            2: NavigationTab.GROWTH,
+            3: NavigationTab.SETTINGS,
+        }
+
+        if tab_index in tab_map:
+            tab = tab_map[tab_index]
+            # Update tab navigation UI
+            if self.tab_navigation:
+                self.tab_navigation.set_selected_tab(tab)
+            # Trigger tab change
+            self._on_tab_change(tab)
+            logger.debug(f"Switched to tab {tab_index}: {tab.value}")
+
     def _on_patient_selected(self, patient: Patient):
         """Handle patient selection.
 
@@ -375,6 +405,12 @@ class MainLayout(ft.UserControl):
     def _on_new_patient(self, patient_data: dict):
         """Handle new patient creation (delegated to app)."""
         pass  # Will be handled by app.py
+
+    def _on_patient_updated(self):
+        """Handle patient list update request."""
+        # Refresh patient list
+        if self.patient_panel:
+            self.patient_panel.load_all_patients()
 
     def _on_generate_prescription(self, clinical_notes: str, callback):
         """Handle prescription generation (delegated to app)."""

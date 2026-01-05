@@ -70,6 +70,7 @@ class AppSettings:
     doctor: DoctorSettings = field(default_factory=DoctorSettings)
     theme: str = "light"  # "light" or "dark"
     language: str = "en"  # Currently only "en" supported
+    tutorial_completed: bool = False  # First-run tutorial completion status
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -79,6 +80,7 @@ class AppSettings:
             'doctor': self.doctor.to_dict(),
             'theme': self.theme,
             'language': self.language,
+            'tutorial_completed': self.tutorial_completed,
         }
 
     @classmethod
@@ -94,6 +96,7 @@ class AppSettings:
             doctor=DoctorSettings.from_dict(doctor_data),
             theme=data.get('theme', 'light'),
             language=data.get('language', 'en'),
+            tutorial_completed=data.get('tutorial_completed', False),
         )
 
 
@@ -324,3 +327,25 @@ class SettingsService:
 
         self.update_doctor_settings(doctor_settings)
         logger.info(f"Clinic info saved: {clinic_name}")
+
+    def is_tutorial_completed(self) -> bool:
+        """Check if the tutorial has been completed.
+
+        Returns:
+            True if tutorial has been completed, False otherwise
+        """
+        return self.load().tutorial_completed
+
+    def mark_tutorial_completed(self):
+        """Mark the tutorial as completed."""
+        settings = self.load()
+        settings.tutorial_completed = True
+        self.save(settings)
+        logger.info("Tutorial marked as completed")
+
+    def reset_tutorial(self):
+        """Reset tutorial completion status (for re-triggering)."""
+        settings = self.load()
+        settings.tutorial_completed = False
+        self.save(settings)
+        logger.info("Tutorial status reset")
