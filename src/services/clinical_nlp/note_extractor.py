@@ -114,7 +114,7 @@ class ClinicalNoteExtractor:
         vitals = self._extract_vitals_dict(normalized)
         examination = self._extract_examination(normalized)
         diagnoses = self._extract_diagnosis_list(normalized)
-        medications = self._extract_medications(normalized)
+        medications = self.extract_medications(normalized)  # Use public method
         investigations = self._extract_investigations(normalized)
 
         # Build SOAP note

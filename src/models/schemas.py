@@ -10,7 +10,7 @@ class Patient(BaseModel):
     id: Optional[int] = None
     uhid: Optional[str] = None
     name: str
-    age: Optional[int] = None
+    age: Optional[int] = Field(default=None, ge=0, description="Age must be non-negative")
     gender: Optional[str] = None  # M/F/O
     phone: Optional[str] = None
     address: Optional[str] = None

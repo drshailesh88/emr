@@ -388,8 +388,9 @@ def test_integrations(services):
             backups = backup_service.list_backups()
             assert len(backups) > 0
 
-            # Cleanup
-            backup_path.unlink()
+            # Cleanup - backup_path is a directory
+            import shutil
+            shutil.rmtree(backup_path)
             log_test("Integration Tests", "Backup create and list", True)
         else:
             raise Exception("BackupService or DatabaseService not available")
