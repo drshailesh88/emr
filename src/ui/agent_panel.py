@@ -5,6 +5,7 @@ from typing import Callable, Optional, List
 from dataclasses import dataclass
 from datetime import datetime
 import logging
+import threading
 
 from ..models.schemas import Patient
 from ..services.llm import LLMService
@@ -40,6 +41,9 @@ class AgentPanel:
 
         self.current_patient: Optional[Patient] = None
         self.messages: List[ChatMessage] = []
+
+        # Thread safety
+        self._messages_lock = threading.Lock()
 
         # UI components
         self.chat_list: Optional[ft.ListView] = None
@@ -178,7 +182,8 @@ class AgentPanel:
             self.doc_count.value = "Error loading records"
 
         # Clear chat history (keep welcome message)
-        self.messages = []
+        with self._messages_lock:
+            self.messages = []
         self.chat_list.controls.clear()
         self._add_assistant_message(
             f"Now viewing records for {patient.name}. "
@@ -191,13 +196,15 @@ class AgentPanel:
     def _add_user_message(self, content: str):
         """Add a user message to the chat."""
         msg = ChatMessage(role="user", content=content)
-        self.messages.append(msg)
+        with self._messages_lock:
+            self.messages.append(msg)
         self._render_message(msg)
 
     def _add_assistant_message(self, content: str):
         """Add an assistant message to the chat."""
         msg = ChatMessage(role="assistant", content=content)
-        self.messages.append(msg)
+        with self._messages_lock:
+            self.messages.append(msg)
         self._render_message(msg)
 
     def _render_message(self, msg: ChatMessage):

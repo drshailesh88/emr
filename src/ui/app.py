@@ -14,6 +14,7 @@ from ..models.schemas import Patient, Visit, Prescription
 from .patient_panel import PatientPanel
 from .central_panel import CentralPanel
 from .agent_panel import AgentPanel
+from .state import StateManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,8 @@ class DocAssistApp:
         self.rag = RAGService()
         self.pdf = PDFService()
 
-        self.current_patient: Optional[Patient] = None
+        # Centralized state management
+        self.state = StateManager()
         self.page: Optional[ft.Page] = None
 
         # UI components (initialized in build)
@@ -174,6 +176,7 @@ class DocAssistApp:
 
     def _update_status(self, message: str, error: bool = False):
         """Update status bar."""
+        self.state.set_status(message, error)
         if self.status_bar and self.page:
             self.status_bar.value = message
             self.status_bar.color = ft.Colors.RED_600 if error else ft.Colors.GREY_600
@@ -182,17 +185,25 @@ class DocAssistApp:
     def _load_patients(self):
         """Load all patients into the list."""
         patients = self.db.get_all_patients()
+        self.state.update(patients=patients)
         if self.patient_panel:
             self.patient_panel.set_patients(patients)
 
     def _on_patient_selected(self, patient: Patient):
         """Handle patient selection."""
-        self.current_patient = patient
-        self.central_panel.set_patient(patient)
-        self.agent_panel.set_patient(patient)
-
         # Load visits for this patient
         visits = self.db.get_patient_visits(patient.id)
+
+        # Update state
+        self.state.update(
+            current_patient=patient,
+            current_prescription=None,
+            visits=visits
+        )
+
+        # Update UI panels
+        self.central_panel.set_patient(patient)
+        self.agent_panel.set_patient(patient)
         self.central_panel.set_visits(visits)
 
         # Index patient documents for RAG in background
@@ -237,6 +248,7 @@ class DocAssistApp:
                     patient_ids = [r[0] for r in results]
                     patients = [self.db.get_patient(pid) for pid in patient_ids if self.db.get_patient(pid)]
 
+            self.state.update(patients=patients)
             self.patient_panel.set_patients(patients)
             logger.info(f"Patient search returned {len(patients)} results")
         except Exception as e:
@@ -280,6 +292,8 @@ class DocAssistApp:
                 success, prescription, raw = self.llm.generate_prescription(clinical_notes)
                 if success:
                     logger.info("Prescription generated successfully")
+                    # Update state with the generated prescription
+                    self.state.update(current_prescription=prescription)
                 else:
                     logger.error(f"Prescription generation failed: {raw[:100]}")
                 if self.page:
@@ -297,22 +311,27 @@ class DocAssistApp:
 
     def _on_save_visit(self, visit_data: dict):
         """Handle saving a visit."""
-        if not self.current_patient:
+        current_patient = self.state.get_current_patient()
+        if not current_patient:
             logger.warning("Save visit attempted without current patient")
             return False
 
         try:
             visit = Visit(
-                patient_id=self.current_patient.id,
+                patient_id=current_patient.id,
                 **visit_data
             )
             saved_visit = self.db.add_visit(visit)
-            logger.info(f"Visit saved for patient {self.current_patient.id} (Visit ID: {saved_visit.id})")
+            logger.info(f"Visit saved for patient {current_patient.id} (Visit ID: {saved_visit.id})")
 
             # Reindex patient for RAG
-            self._index_patient_for_rag(self.current_patient.id)
+            self._index_patient_for_rag(current_patient.id)
 
-            self._update_status(f"Visit saved for {self.current_patient.name}")
+            # Update visits in state
+            visits = self.db.get_patient_visits(current_patient.id)
+            self.state.update(visits=visits)
+
+            self._update_status(f"Visit saved for {current_patient.name}")
             return True
         except Exception as e:
             logger.error(f"Error saving visit: {e}", exc_info=True)
@@ -321,13 +340,14 @@ class DocAssistApp:
 
     def _on_print_pdf(self, prescription: Prescription, chief_complaint: str) -> Optional[str]:
         """Handle PDF generation."""
-        if not self.current_patient or not prescription:
+        current_patient = self.state.get_current_patient()
+        if not current_patient or not prescription:
             logger.warning("PDF generation attempted without patient or prescription")
             return None
 
         try:
             filepath = self.pdf.generate_prescription_pdf(
-                patient=self.current_patient,
+                patient=current_patient,
                 prescription=prescription,
                 chief_complaint=chief_complaint,
                 doctor_name="Dr. ",  # TODO: Get from settings
@@ -348,7 +368,8 @@ class DocAssistApp:
 
     def _on_rag_query(self, question: str, callback):
         """Handle RAG query."""
-        if not self.current_patient:
+        current_patient = self.state.get_current_patient()
+        if not current_patient:
             logger.warning("RAG query attempted without current patient")
             callback(False, "Please select a patient first.")
             return
@@ -359,13 +380,13 @@ class DocAssistApp:
             return
 
         self._update_status("Searching patient records...")
-        logger.debug(f"RAG query for patient {self.current_patient.id}: {question}")
+        logger.debug(f"RAG query for patient {current_patient.id}: {question}")
 
         def query():
             try:
                 # Get relevant context
                 context = self.rag.query_patient_context(
-                    patient_id=self.current_patient.id,
+                    patient_id=current_patient.id,
                     query=question,
                     n_results=5
                 )

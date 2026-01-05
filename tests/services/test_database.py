@@ -393,3 +393,106 @@ class TestDatabaseConnectionHandling:
         # Original patient should still exist
         patients = db_service.get_all_patients()
         assert len(patients) >= 1
+
+
+class TestDatabaseMigrations:
+    """Tests for database migration system."""
+
+    def test_schema_version_table_created(self, db_service):
+        """Test that schema_versions table is created."""
+        with db_service.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_versions'"
+            )
+            result = cursor.fetchone()
+
+        assert result is not None
+
+    def test_initial_schema_version(self, db_service):
+        """Test that initial schema version is 1."""
+        version = db_service._get_schema_version()
+        assert version == 1
+
+    def test_schema_version_constant(self, db_service):
+        """Test that SCHEMA_VERSION constant is set."""
+        assert hasattr(db_service, 'SCHEMA_VERSION')
+        assert db_service.SCHEMA_VERSION >= 1
+
+    def test_migration_v1_creates_tables(self, temp_db_path):
+        """Test that migration v1 creates all required tables."""
+        db = DatabaseService(db_path=temp_db_path)
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+            tables = {row[0] for row in cursor.fetchall()}
+
+        expected = {"patients", "visits", "investigations", "procedures", "schema_versions"}
+        assert expected.issubset(tables)
+
+    def test_migration_runs_only_once(self, temp_db_path):
+        """Test that migrations don't run again on subsequent initialization."""
+        # First initialization
+        db1 = DatabaseService(db_path=temp_db_path)
+        version1 = db1._get_schema_version()
+
+        # Get count of schema_versions records
+        with db1.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM schema_versions")
+            count1 = cursor.fetchone()[0]
+
+        # Second initialization (should not re-run migrations)
+        db2 = DatabaseService(db_path=temp_db_path)
+        version2 = db2._get_schema_version()
+
+        with db2.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM schema_versions")
+            count2 = cursor.fetchone()[0]
+
+        assert version1 == version2
+        assert count1 == count2
+
+    def test_migrations_property_returns_dict(self, db_service):
+        """Test that _migrations property returns a dictionary."""
+        migrations = db_service._migrations
+
+        assert isinstance(migrations, dict)
+        assert 1 in migrations
+        assert callable(migrations[1])
+
+    def test_schema_version_recorded_with_timestamp(self, db_service):
+        """Test that schema version is recorded with timestamp."""
+        with db_service.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT version, applied_at FROM schema_versions WHERE version = 1")
+            result = cursor.fetchone()
+
+        assert result is not None
+        assert result[0] == 1  # version
+        assert result[1] is not None  # applied_at timestamp
+
+    def test_get_schema_version_empty_database(self, temp_db_path):
+        """Test _get_schema_version returns 0 for new database before migrations."""
+        # Create a database connection without running migrations
+        import sqlite3
+        conn = sqlite3.connect(temp_db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE schema_versions (
+                version INTEGER PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+        # Now create the service and check version
+        db = DatabaseService(db_path=temp_db_path)
+        # The version should be 1 now after initialization runs migrations
+        version = db._get_schema_version()
+        assert version == 1

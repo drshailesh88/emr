@@ -5,6 +5,7 @@ from typing import Callable, Optional, List
 import json
 from datetime import date
 import logging
+import threading
 
 from ..models.schemas import Patient, Visit, Prescription, Medication
 from ..services.llm import LLMService
@@ -30,6 +31,9 @@ class CentralPanel:
         self.current_patient: Optional[Patient] = None
         self.current_prescription: Optional[Prescription] = None
         self.visits: List[Visit] = []
+
+        # Thread safety
+        self._prescription_lock = threading.Lock()
 
         # UI components
         self.patient_header: Optional[ft.Container] = None
@@ -181,7 +185,9 @@ class CentralPanel:
         """Set the current patient."""
         logger.debug(f"Setting current patient: {patient.name} (ID: {patient.id})")
         self.current_patient = patient
-        self.current_prescription = None
+
+        with self._prescription_lock:
+            self.current_prescription = None
 
         # Update header
         header_text = f"{patient.name}"
@@ -299,8 +305,10 @@ class CentralPanel:
         if visit.prescription_json:
             try:
                 rx_data = json.loads(visit.prescription_json)
-                self.current_prescription = Prescription(**rx_data)
-                self._display_prescription(self.current_prescription)
+                prescription = Prescription(**rx_data)
+                with self._prescription_lock:
+                    self.current_prescription = prescription
+                self._display_prescription(prescription)
             except json.JSONDecodeError as e:
                 logger.error(f"Error parsing prescription JSON for visit {visit.id}: {e}")
             except Exception as e:
@@ -330,7 +338,8 @@ class CentralPanel:
 
             if success and prescription:
                 logger.debug("Prescription received, displaying in UI")
-                self.current_prescription = prescription
+                with self._prescription_lock:
+                    self.current_prescription = prescription
                 self._display_prescription(prescription)
                 self.save_btn.disabled = False
                 self.print_btn.disabled = False
@@ -427,20 +436,22 @@ class CentralPanel:
 
     def _on_save_click(self, e):
         """Handle save visit click."""
-        if not self.current_patient or not self.current_prescription:
-            logger.warning("Save visit attempted without patient or prescription")
-            return
+        with self._prescription_lock:
+            if not self.current_patient or not self.current_prescription:
+                logger.warning("Save visit attempted without patient or prescription")
+                return
+            current_prescription = self.current_prescription
 
         logger.info("Saving visit from UI")
         try:
             # Get diagnosis from prescription
-            diagnosis = ", ".join(self.current_prescription.diagnosis) if self.current_prescription.diagnosis else ""
+            diagnosis = ", ".join(current_prescription.diagnosis) if current_prescription.diagnosis else ""
 
             visit_data = {
                 "chief_complaint": self.complaint_field.value.strip(),
                 "clinical_notes": self.notes_field.value.strip(),
                 "diagnosis": diagnosis,
-                "prescription_json": self.current_prescription.model_dump_json(),
+                "prescription_json": current_prescription.model_dump_json(),
             }
 
             success = self.on_save_visit(visit_data)
@@ -456,14 +467,16 @@ class CentralPanel:
 
     def _on_print_click(self, e):
         """Handle print PDF click."""
-        if not self.current_prescription:
-            logger.warning("Print PDF attempted without prescription")
-            return
+        with self._prescription_lock:
+            if not self.current_prescription:
+                logger.warning("Print PDF attempted without prescription")
+                return
+            current_prescription = self.current_prescription
 
         logger.info("Generating PDF from UI")
         try:
             filepath = self.on_print_pdf(
-                self.current_prescription,
+                current_prescription,
                 self.complaint_field.value.strip()
             )
 
