@@ -10,6 +10,7 @@ from .add_patient_screen import AddPatientScreen, QuickAddPatientDialog
 from .biometric_prompt import BiometricPrompt, BiometricPromptDialog
 from .onboarding_screen import OnboardingScreen
 from .welcome_back_screen import WelcomeBackScreen
+from .quick_note_screen import QuickNoteScreen, QuickNoteData
 
 # Optional screens (may not exist yet)
 try:
@@ -51,6 +52,7 @@ __all__ = [
     'BiometricPromptDialog',
     'OnboardingScreen',
     'WelcomeBackScreen',
+    'QuickNoteScreen',
     'AddVisitScreen',
     'AddLabScreen',
     'AddAppointmentScreen',
@@ -62,6 +64,7 @@ __all__ = [
     'VisitData',
     'LabData',
     'ProcedureData',
+    'QuickNoteData',
     'VisitFormData',
     'MedicationData',
     'LabFormData',

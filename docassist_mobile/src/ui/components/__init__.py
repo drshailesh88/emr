@@ -11,6 +11,7 @@ from .floating_action_button import FloatingActionButton, SimpleFAB, FABAction
 from .speed_dial import SpeedDial, CompactSpeedDial, SpeedDialAction
 from .page_indicator import PageIndicator, ProgressIndicator, StepIndicator
 from .onboarding_page import OnboardingPage, IllustrationCard, FeatureList
+from .bottom_nav import BottomNavBar, NavTab, NavDestination
 
 __all__ = [
     'PatientCard',
@@ -32,4 +33,7 @@ __all__ = [
     'OnboardingPage',
     'IllustrationCard',
     'FeatureList',
+    'BottomNavBar',
+    'NavTab',
+    'NavDestination',
 ]
