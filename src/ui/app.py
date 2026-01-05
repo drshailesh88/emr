@@ -4,6 +4,7 @@ import flet as ft
 from typing import Optional
 import threading
 import logging
+import os
 
 from ..services.database import DatabaseService
 from ..services.llm import LLMService
@@ -911,4 +912,11 @@ class DocAssistApp:
 def run_app():
     """Run the DocAssist EMR application."""
     app = DocAssistApp()
-    ft.app(target=app.main)
+    port = int(os.getenv("DOCASSIST_PORT", "8550"))
+    try:
+        ft.app(target=app.main, port=port)
+    except PermissionError:
+        uds_path = os.getenv("DOCASSIST_UDS_PATH", os.path.join("data", "flet.sock"))
+        logger.warning("Flet socket permission error; retrying with UDS path %s", uds_path)
+        os.environ["FLET_SERVER_UDS_PATH"] = uds_path
+        ft.app(target=app.main)

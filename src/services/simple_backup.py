@@ -63,9 +63,8 @@ class SimpleBackupService:
             data_dir = Path(os.getenv("DOCASSIST_DATA_DIR", "data"))
 
         if backup_dir is None:
-            # Default to user's home directory for better visibility
-            home = Path.home()
-            backup_dir = home / "DocAssist" / "backups"
+            # Default to workspace-local backups to avoid permission issues
+            backup_dir = Path(os.getenv("DOCASSIST_BACKUP_DIR", "data/backups"))
 
         self.data_dir = Path(data_dir)
         self.backup_dir = Path(backup_dir)
