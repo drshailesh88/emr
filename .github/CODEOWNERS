@@ -1,0 +1,38 @@
+# DocAssist EMR Code Owners
+# These owners will be automatically requested for review when PRs modify these files
+
+# Default owner for everything in the repo
+* @drshailesh88
+
+# Critical security and encryption paths require extra scrutiny
+src/services/audit/ @drshailesh88
+src/services/crypto.py @drshailesh88
+src/services/backup.py @drshailesh88
+
+# Database schema changes need careful review
+src/services/database.py @drshailesh88
+src/models/schemas.py @drshailesh88
+
+# LLM and RAG components
+src/services/llm.py @drshailesh88
+src/services/rag.py @drshailesh88
+
+# Cloud API and sync services
+cloud-api/ @drshailesh88
+src/services/sync.py @drshailesh88
+
+# Mobile app components
+docassist_mobile/ @drshailesh88
+
+# CI/CD and workflows
+.github/workflows/ @drshailesh88
+.pre-commit-config.yaml @drshailesh88
+
+# Documentation
+*.md @drshailesh88
+docs/ @drshailesh88
+
+# Configuration files
+requirements.txt @drshailesh88
+pyproject.toml @drshailesh88
+Makefile @drshailesh88

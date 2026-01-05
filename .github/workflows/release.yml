@@ -1,0 +1,332 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          # Generate changelog
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save to file
+          echo "# Changelog for ${{ steps.get_version.outputs.version }}" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "$CHANGELOG" >> CHANGELOG.md
+
+          # Group by type
+          echo "" >> CHANGELOG.md
+          echo "## Features" >> CHANGELOG.md
+          git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges | grep -i "^- feat" || echo "No new features" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## Bug Fixes" >> CHANGELOG.md
+          git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges | grep -i "^- fix" || echo "No bug fixes" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## Other Changes" >> CHANGELOG.md
+          git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges | grep -iv "^- feat\|^- fix" || echo "No other changes" >> CHANGELOG.md
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: DocAssist EMR ${{ steps.get_version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+
+  build-windows:
+    name: Build Windows Desktop App
+    runs-on: windows-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flet pyinstaller
+
+      - name: Build Windows app with Flet
+        run: |
+          flet build windows `
+            --build-number=${{ github.run_number }} `
+            --build-version="${{ needs.create-release.outputs.version }}" `
+            --product "DocAssist EMR" `
+            --org "DocAssist" `
+            --company "DocAssist Health Technologies"
+
+      - name: Package Windows installer
+        run: |
+          Compress-Archive -Path build/windows/* -DestinationPath DocAssist-EMR-Windows-${{ needs.create-release.outputs.version }}.zip
+
+      - name: Upload Windows build
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: DocAssist-EMR-Windows-${{ needs.create-release.outputs.version }}.zip
+          asset_name: DocAssist-EMR-Windows-${{ needs.create-release.outputs.version }}.zip
+          asset_content_type: application/zip
+
+  build-macos:
+    name: Build macOS Desktop App
+    runs-on: macos-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flet pyinstaller
+
+      - name: Build macOS app with Flet
+        run: |
+          flet build macos \
+            --build-number=${{ github.run_number }} \
+            --build-version="${{ needs.create-release.outputs.version }}" \
+            --product "DocAssist EMR" \
+            --org "DocAssist" \
+            --company "DocAssist Health Technologies"
+
+      - name: Package macOS app
+        run: |
+          cd build/macos
+          zip -r ../../DocAssist-EMR-macOS-${{ needs.create-release.outputs.version }}.zip *.app
+          cd ../..
+
+      - name: Upload macOS build
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: DocAssist-EMR-macOS-${{ needs.create-release.outputs.version }}.zip
+          asset_name: DocAssist-EMR-macOS-${{ needs.create-release.outputs.version }}.zip
+          asset_content_type: application/zip
+
+  build-linux:
+    name: Build Linux Desktop App
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmpv1 mpv
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flet pyinstaller
+
+      - name: Build Linux app with Flet
+        run: |
+          flet build linux \
+            --build-number=${{ github.run_number }} \
+            --build-version="${{ needs.create-release.outputs.version }}" \
+            --product "DocAssist EMR" \
+            --org "DocAssist" \
+            --company "DocAssist Health Technologies"
+
+      - name: Package Linux app
+        run: |
+          cd build/linux
+          tar -czf ../../DocAssist-EMR-Linux-${{ needs.create-release.outputs.version }}.tar.gz *
+          cd ../..
+
+      - name: Upload Linux build
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: DocAssist-EMR-Linux-${{ needs.create-release.outputs.version }}.tar.gz
+          asset_name: DocAssist-EMR-Linux-${{ needs.create-release.outputs.version }}.tar.gz
+          asset_content_type: application/gzip
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flet
+
+      - name: Build Android APK
+        run: |
+          flet build apk \
+            --build-number=${{ github.run_number }} \
+            --build-version="${{ needs.create-release.outputs.version }}" \
+            --product "DocAssist EMR Mobile" \
+            --org "com.docassist.emr" \
+            --company "DocAssist Health Technologies"
+
+      - name: Sign APK (if keystore available)
+        continue-on-error: true
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE" ]; then
+            echo "$ANDROID_KEYSTORE" | base64 -d > release.keystore
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore release.keystore \
+              -storepass "$KEYSTORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
+              build/apk/app-release.apk "$KEY_ALIAS"
+            rm release.keystore
+          fi
+
+      - name: Rename APK
+        run: |
+          mv build/apk/app-release.apk DocAssist-EMR-Android-${{ needs.create-release.outputs.version }}.apk || \
+          cp build/apk/*.apk DocAssist-EMR-Android-${{ needs.create-release.outputs.version }}.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: DocAssist-EMR-Android-${{ needs.create-release.outputs.version }}.apk
+          asset_name: DocAssist-EMR-Android-${{ needs.create-release.outputs.version }}.apk
+          asset_content_type: application/vnd.android.package-archive
+
+  build-ios:
+    name: Build iOS App (if possible)
+    runs-on: macos-latest
+    needs: create-release
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flet
+
+      - name: Build iOS app
+        run: |
+          flet build ipa \
+            --build-number=${{ github.run_number }} \
+            --build-version="${{ needs.create-release.outputs.version }}" \
+            --product "DocAssist EMR Mobile" \
+            --org "com.docassist.emr" \
+            --company "DocAssist Health Technologies" || echo "iOS build requires valid certificates"
+
+  post-release:
+    name: Post-Release Tasks
+    runs-on: ubuntu-latest
+    needs: [create-release, build-windows, build-macos, build-linux, build-android]
+    if: always()
+    steps:
+      - name: Notify release completion
+        run: |
+          echo "Release ${{ needs.create-release.outputs.version }} completed!"
+          echo "Windows: ${{ needs.build-windows.result }}"
+          echo "macOS: ${{ needs.build-macos.result }}"
+          echo "Linux: ${{ needs.build-linux.result }}"
+          echo "Android: ${{ needs.build-android.result }}"
+          # Add notification to Slack/Discord here if configured
