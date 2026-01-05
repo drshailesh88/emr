@@ -173,15 +173,16 @@ class SentimentReport:
 class ReviewManager:
     """Manages reviews, requests, and analytics"""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: Optional[str] = None):
         """
         Initialize review manager.
 
         Args:
-            db_path: Path to SQLite database
+            db_path: Path to SQLite database. If None, operates in memory-only mode.
         """
         self.db_path = db_path
-        self._init_tables()
+        if db_path:
+            self._init_tables()
 
         # Positive/negative keywords for sentiment analysis (Indian context)
         self.positive_keywords = {

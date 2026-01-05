@@ -375,6 +375,44 @@ class WorkflowEngine:
 
         return True
 
+    def trigger_sync(
+        self,
+        trigger_name: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Synchronous wrapper for trigger().
+
+        Use this when calling from non-async contexts.
+        For async contexts, use await trigger() directly.
+
+        Args:
+            trigger_name: Name of trigger
+            context: Optional context data
+
+        Returns:
+            True if transition successful
+        """
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context, create a task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self.trigger(trigger_name, context)
+                    )
+                    return future.result(timeout=5.0)
+            else:
+                # No running loop, we can use asyncio.run
+                return asyncio.run(self.trigger(trigger_name, context))
+        except RuntimeError:
+            # No event loop, create one
+            return asyncio.run(self.trigger(trigger_name, context))
+
     async def _execute_callbacks(
         self,
         callbacks: List[Callable],

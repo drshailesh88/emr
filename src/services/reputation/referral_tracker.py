@@ -109,15 +109,16 @@ class ReferralStats:
 class ReferralTracker:
     """Tracks and analyzes patient referrals"""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: Optional[str] = None):
         """
         Initialize referral tracker.
 
         Args:
-            db_path: Path to SQLite database
+            db_path: Path to SQLite database. If None, operates in memory-only mode.
         """
         self.db_path = db_path
-        self._init_tables()
+        if db_path:
+            self._init_tables()
 
     def _init_tables(self):
         """Initialize database tables"""

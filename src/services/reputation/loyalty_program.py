@@ -130,15 +130,16 @@ class Milestone:
 class LoyaltyProgram:
     """Manages patient loyalty program"""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: Optional[str] = None):
         """
         Initialize loyalty program.
 
         Args:
-            db_path: Path to SQLite database
+            db_path: Path to SQLite database. If None, operates in memory-only mode.
         """
         self.db_path = db_path
-        self._init_tables()
+        if db_path:
+            self._init_tables()
 
         # Points earning rules
         self.points_per_visit = 10
