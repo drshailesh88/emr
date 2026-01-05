@@ -123,73 +123,85 @@ class LLMService:
             return self.context_length
 
     def _load_prompts(self):
-        """Load prompt templates."""
+        """Load prompt templates from prompts/*.txt files."""
         prompts_dir = Path(__file__).parent.parent.parent / "prompts"
 
         # Prescription prompt
         rx_prompt_path = prompts_dir / "prescription.txt"
         if rx_prompt_path.exists():
             self.prescription_prompt = rx_prompt_path.read_text()
+            logger.info(f"Loaded prescription prompt from {rx_prompt_path}")
         else:
+            logger.warning(
+                f"Prescription prompt file not found at {rx_prompt_path}. "
+                "Using minimal fallback prompt. This should not happen in production!"
+            )
             self.prescription_prompt = self._default_prescription_prompt()
 
         # RAG query prompt
         rag_prompt_path = prompts_dir / "rag_query.txt"
         if rag_prompt_path.exists():
             self.rag_prompt = rag_prompt_path.read_text()
+            logger.info(f"Loaded RAG prompt from {rag_prompt_path}")
         else:
+            logger.warning(
+                f"RAG prompt file not found at {rag_prompt_path}. "
+                "Using minimal fallback prompt. This should not happen in production!"
+            )
             self.rag_prompt = self._default_rag_prompt()
 
     def _default_prescription_prompt(self) -> str:
-        return """You are a medical prescription assistant for Indian doctors.
+        """Emergency fallback prescription prompt.
 
-Your ONLY job is to convert clinical notes into a structured JSON prescription.
+        WARNING: This is a minimal fallback. The actual prompt should be loaded
+        from prompts/prescription.txt which is the source of truth.
+        """
+        logger.warning(
+            "Using emergency fallback prescription prompt. "
+            "prompts/prescription.txt should be the source of truth!"
+        )
+        return """Convert the following clinical notes into a JSON prescription.
 
-RULES:
-1. Output ONLY valid JSON. No explanations. No markdown. No code blocks.
-2. Use generic drug names when possible, but Indian brand names are acceptable.
-3. Include standard Indian dosing conventions.
-4. If information is missing, make reasonable clinical assumptions.
-5. Always include red flags for the condition.
-
-The JSON must follow this EXACT schema:
+Output ONLY valid JSON with this schema:
 {
   "diagnosis": ["string"],
-  "medications": [
-    {
-      "drug_name": "string",
-      "strength": "string with unit",
-      "form": "tablet|capsule|syrup|injection|cream|drops",
-      "dose": "string",
-      "frequency": "OD|BD|TDS|QID|HS|SOS|stat",
-      "duration": "string",
-      "instructions": "string"
-    }
-  ],
+  "medications": [{"drug_name": "string", "strength": "string", "form": "tablet",
+                   "dose": "1", "frequency": "OD", "duration": "7 days", "instructions": "after meals"}],
   "investigations": ["string"],
   "advice": ["string"],
   "follow_up": "string",
   "red_flags": ["string"]
 }
 
-If the clinical notes are in Hinglish, translate to English for the prescription.
-
 Clinical Notes:
 """
 
     def _default_rag_prompt(self) -> str:
-        return """You are a medical assistant helping a doctor query patient records.
+        """Emergency fallback RAG prompt.
 
-Based on the following patient records, answer the doctor's question accurately and concisely.
-If the information is not available in the records, say so clearly.
-Always mention the date when providing clinical information.
+        WARNING: This is a minimal fallback. The actual prompt should be loaded
+        from prompts/rag_query.txt which is the source of truth.
+        """
+        logger.warning(
+            "Using emergency fallback RAG prompt. "
+            "prompts/rag_query.txt should be the source of truth!"
+        )
+        return """Answer the doctor's question based on the patient records provided.
 
 PATIENT RECORDS:
 {context}
 
-DOCTOR'S QUESTION: {question}
+QUESTION: {question}
 
-ANSWER (be concise and clinical):"""
+ANSWER:"""
+
+    def reload_prompts(self) -> None:
+        """Reload prompt templates from files.
+
+        Useful for development or if prompts are updated while the app is running.
+        """
+        logger.info("Reloading prompt templates from prompts/*.txt files")
+        self._load_prompts()
 
     def is_available(self) -> bool:
         """Check if Ollama is running."""

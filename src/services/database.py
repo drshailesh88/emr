@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 class DatabaseService:
     """Handles all SQLite database operations."""
 
+    # Current schema version
+    SCHEMA_VERSION = 1
+
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
             db_path = os.getenv("DOCASSIST_DB_PATH", "data/clinic.db")
@@ -40,7 +43,58 @@ class DatabaseService:
             conn.close()
 
     def _init_database(self):
-        """Initialize database tables."""
+        """Initialize database and run migrations."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Create schema_versions table first
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS schema_versions (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+        # Run any pending migrations
+        self._run_migrations()
+
+    def _get_schema_version(self) -> int:
+        """Get the current schema version from database."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(version) FROM schema_versions")
+            result = cursor.fetchone()[0]
+            return result if result is not None else 0
+
+    def _set_schema_version(self, version: int):
+        """Set the schema version after applying a migration."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO schema_versions (version)
+                VALUES (?)
+            """, (version,))
+            logger.info(f"Applied migration to schema version {version}")
+
+    def _run_migrations(self):
+        """Run all pending migrations."""
+        current_version = self._get_schema_version()
+        logger.info(f"Current schema version: {current_version}")
+
+        for version in range(current_version + 1, self.SCHEMA_VERSION + 1):
+            if version in self._migrations:
+                logger.info(f"Running migration to version {version}")
+                self._migrations[version]()
+                self._set_schema_version(version)
+            else:
+                logger.warning(f"No migration defined for version {version}")
+
+        if current_version < self.SCHEMA_VERSION:
+            logger.info(f"Schema updated from version {current_version} to {self.SCHEMA_VERSION}")
+
+    def _migration_v1(self):
+        """Initial schema creation - v1."""
+        logger.info("Creating initial database schema (v1)")
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
@@ -117,6 +171,31 @@ class DatabaseService:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_investigations_patient ON investigations(patient_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_procedures_patient ON procedures(patient_id)")
+
+    def _migration_v2(self):
+        """Sample placeholder migration - v2.
+
+        This is an example of how to add future migrations.
+        When you need to modify the schema, increment SCHEMA_VERSION
+        and add the migration logic here.
+
+        Example:
+            # Add a new column to patients table
+            cursor.execute("ALTER TABLE patients ADD COLUMN email TEXT")
+        """
+        logger.info("Running migration v2 (placeholder - no changes)")
+        # This migration intentionally does nothing
+        # It's here as a template for future migrations
+        pass
+
+    # Migration mapping - add new migrations here
+    @property
+    def _migrations(self):
+        """Map of version numbers to migration functions."""
+        return {
+            1: self._migration_v1,
+            # 2: self._migration_v2,  # Uncomment when ready to apply v2
+        }
 
     def _generate_uhid(self) -> str:
         """Generate unique hospital ID."""
