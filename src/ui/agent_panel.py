@@ -35,11 +35,13 @@ class AgentPanel:
         on_query: Callable[[str, Callable], None],
         llm: LLMService,
         rag: RAGService,
+        on_draft_prescription: Optional[Callable[[Callable[[bool, str], None]], None]] = None,
         is_dark: bool = False
     ):
         self.on_query = on_query
         self.llm = llm
         self.rag = rag
+        self.on_draft_prescription = on_draft_prescription
         self.is_dark = is_dark
 
         self.current_patient: Optional[Patient] = None
@@ -235,6 +237,7 @@ class AgentPanel:
         # Quick action chips
         quick_actions = ft.Container(
             content=ft.Row([
+                self._action_chip("Draft Rx", self._draft_prescription),
                 self._quick_chip("Last labs", "What are the most recent lab results?"),
                 self._quick_chip("Medications", "List all current medications"),
                 self._quick_chip("Summary", "Give me a brief summary of this patient"),
@@ -269,6 +272,21 @@ class AgentPanel:
             border_radius=Radius.CHIP,
             padding=ft.padding.symmetric(horizontal=Spacing.SM, vertical=Spacing.XXS),
             on_click=lambda e, q=query: self._quick_query(q),
+            ink=True,
+        )
+
+    def _action_chip(self, label: str, on_click: Callable[[], None]) -> ft.Container:
+        """Create a quick action chip that triggers a callback."""
+        return ft.Container(
+            content=ft.Text(
+                label,
+                size=Typography.LABEL_SMALL.size,
+                color=Colors.PRIMARY_600 if not self.is_dark else Colors.PRIMARY_300,
+            ),
+            bgcolor=Colors.PRIMARY_50 if not self.is_dark else Colors.PRIMARY_900,
+            border_radius=Radius.CHIP,
+            padding=ft.padding.symmetric(horizontal=Spacing.SM, vertical=Spacing.XXS),
+            on_click=lambda e: on_click(),
             ink=True,
         )
 
@@ -464,6 +482,38 @@ class AgentPanel:
                 self.loading_indicator.page.update()
 
         self.on_query(query, callback)
+
+    def _draft_prescription(self):
+        """Request a prescription draft based on current clinical notes."""
+        if not self.current_patient:
+            self._add_assistant_message("Please select a patient first.")
+            return
+
+        if not self.on_draft_prescription:
+            self._add_assistant_message("Prescription drafting is not configured yet.")
+            return
+
+        self._add_assistant_message("Drafting a prescription from the current clinical notes...")
+        self.loading_indicator.visible = True
+        self.send_btn.disabled = True
+        self.typing_indicator.visible = True
+        if self.loading_indicator.page:
+            self.loading_indicator.page.update()
+
+        def callback(success: bool, message: str):
+            self.loading_indicator.visible = False
+            self.send_btn.disabled = False
+            self.typing_indicator.visible = False
+
+            if success:
+                self._add_assistant_message(message)
+            else:
+                self._add_assistant_message(f"Could not draft prescription: {message}")
+
+            if self.loading_indicator.page:
+                self.loading_indicator.page.update()
+
+        self.on_draft_prescription(callback)
 
     def clear_chat(self):
         """Clear the chat history."""
