@@ -364,7 +364,7 @@ class CentralPanel:
                     self.whatsapp_btn,
                     self.save_template_btn,
                 ], spacing=10),
-            ], spacing=15, expand=True),
+            ], spacing=15, expand=True, scroll=ft.ScrollMode.AUTO),
             padding=20,
             expand=True,
         )
@@ -1616,15 +1616,44 @@ class CentralPanel:
 
     def _on_generate_click(self, e):
         """Handle generate prescription click."""
-        clinical_notes = self.notes_field.value.strip()
+        clinical_notes = self._get_clinical_notes_for_prescription()
+        self._trigger_prescription_generation(clinical_notes, e.page)
+
+    def generate_prescription_from_agent(self, on_status: Callable[[bool, str], None]):
+        """Generate prescription when requested from the agent panel."""
+        clinical_notes = self._get_clinical_notes_for_prescription()
+        self._trigger_prescription_generation(clinical_notes, self.notes_field.page if self.notes_field else None, on_status)
+
+    def _get_clinical_notes_for_prescription(self) -> str:
+        """Get clinical notes for prescription generation."""
+        if not self.notes_field:
+            return ""
+        return self.notes_field.value.strip()
+
+    def _get_clinical_notes_for_differential(self) -> str:
+        """Get combined notes for differential diagnosis."""
+        notes = self.notes_field.value.strip() if self.notes_field and self.notes_field.value else ""
+        complaint = self.complaint_field.value.strip() if self.complaint_field and self.complaint_field.value else ""
+        return "\n".join(part for part in [complaint, notes] if part)
+
+    def _trigger_prescription_generation(
+        self,
+        clinical_notes: str,
+        page: Optional[ft.Page],
+        on_status: Optional[Callable[[bool, str], None]] = None,
+    ):
+        """Shared prescription generation flow."""
         if not clinical_notes:
             self._show_snackbar("Please enter clinical notes first", error=True)
+            if on_status:
+                on_status(False, "Please enter clinical notes first.")
             return
 
         # Show loading
         self.loading_indicator.visible = True
         self.generate_btn.disabled = True
-        e.page.update()
+        if page:
+            page.update()
 
         def callback(success: bool, prescription: Optional[Prescription], raw: str):
             self.loading_indicator.visible = False
@@ -1637,14 +1666,18 @@ class CentralPanel:
                 self.print_btn.disabled = False
                 self.whatsapp_btn.disabled = False
                 self.save_template_btn.disabled = False
+                if on_status:
+                    on_status(True, "Prescription drafted and ready for review.")
             else:
                 self.rx_display.controls.clear()
                 self.rx_display.controls.append(
                     ft.Text(f"Error: {raw}", color=ft.Colors.RED_600)
                 )
+                if on_status:
+                    on_status(False, raw)
 
-            if e.page:
-                e.page.update()
+            if page:
+                page.update()
 
         self.on_generate_rx(clinical_notes, callback)
 
@@ -2083,7 +2116,7 @@ class CentralPanel:
         if not self.current_patient or not self.notes_field:
             return
 
-        clinical_notes = self.notes_field.value
+        clinical_notes = self._get_clinical_notes_for_differential()
         if not clinical_notes or len(clinical_notes.strip()) < 10:
             # Clear differentials if notes are too short
             if self.differential_panel:

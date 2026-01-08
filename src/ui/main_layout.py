@@ -195,11 +195,13 @@ class MainLayout(ft.UserControl):
             on_save_visit=self._on_save_visit,
             on_print_pdf=self._on_print_pdf,
             llm=self.llm,
+            db=self.db,
         )
 
         # Agent panel
         self.agent_panel = AgentPanel(
             on_query=self._on_rag_query,
+            on_draft_prescription=self._on_draft_prescription,
             llm=self.llm,
             rag=self.rag,
         )
@@ -427,6 +429,14 @@ class MainLayout(ft.UserControl):
     def _on_rag_query(self, question: str, callback):
         """Handle RAG query (delegated to app)."""
         pass  # Will be handled by app.py
+
+    def _on_draft_prescription(self, callback):
+        """Handle prescription draft request from agent panel."""
+        if not self.central_panel:
+            callback(False, "Prescription panel is not ready yet.")
+            return
+
+        self.central_panel.generate_prescription_from_agent(callback)
 
     def _on_ambient_accept(self, soap_note: SOAPNote):
         """Handle ambient SOAP note acceptance.
